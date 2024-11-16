@@ -223,7 +223,7 @@ public class PublicTemplatesArea : BaseArea
                 ImGui.Text(template.Name);
 
                 ImGui.TableNextColumn();
-                ImGui.Text(template.DiscordId);
+                ImGui.Text(template.CreatorName);
 
                 ImGui.TableNextColumn();
                 ImGui.Text(FormatTimeAgo(template.UpdatedAt));

@@ -23,6 +23,9 @@ public class TemplateInfo
     [JsonPropertyName("discord_id")]
     public string DiscordId { get; set; }
 
+    [JsonPropertyName("creator_name")]
+    public string CreatorName { get; set; }
+
     [JsonPropertyName("name")]
     public string Name { get; set; }
 

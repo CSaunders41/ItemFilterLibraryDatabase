@@ -138,7 +138,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
         else
         {
             ImGui.Text($"Name: {_name}");
-            ImGui.Text($"Author: {_template.DiscordId}");
+            ImGui.Text($"Author: {_template.CreatorName}");
             ImGui.Text($"Version: {_template.Version}");
             ImGui.Text($"Last Updated: {plugin.UnixTimeToString(_template.UpdatedAt)}");
         }
