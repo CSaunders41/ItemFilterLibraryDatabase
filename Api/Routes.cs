@@ -13,9 +13,6 @@ public static class Routes
         {
             public static object CreateRefreshRequest(string refreshToken) =>
                 new { refresh_token = refreshToken };
-
-            public static object CreateValidateRequest(string accessToken) =>
-                new { access_token = accessToken };
         }
     }
 
@@ -24,8 +21,6 @@ public static class Routes
         private const string Base = "/health";
 
         public static string Ping => $"{Base}/ping";
-        public static string Status => Base;
-        public static string Detailed => $"{Base}/detailed";
     }
 
     public static class Templates

@@ -13,14 +13,14 @@ namespace ItemFilterLibraryDatabase;
 public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDatabaseSettings>
 {
     private const string API_URL = "http://localhost:3000";
-    private readonly List<IArea> _areas = new();
+    private readonly List<IArea> _areas = [];
     private ApiClient _apiClient;
     private bool _isAuthenticated;
+    private bool _isInitialized = false;
     private string _newAuthToken = string.Empty;
+    private int _previousAreaIndex = -1;
     private int _selectedAreaIndex;
     private string _statusMessage = string.Empty;
-    private bool _isInitialized = false;
-    private int _previousAreaIndex = -1;
 
     public bool IsLoading { get; set; }
 
@@ -99,31 +99,80 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
         const float buttonWidth = 200f;
         const float inputWidth = 400f;
 
-        // Show current auth status
-        var statusColor = _isAuthenticated
-            ? new Vector4(0, 1, 0, 1)
-            : new Vector4(1, 0, 0, 1);
+        // Authentication Status with collapsible header
+        var isAuthOpen = ImGui.CollapsingHeader("Authentication Status", ImGuiTreeNodeFlags.DefaultOpen);
 
-        ImGui.TextColored(statusColor,
-            _isAuthenticated
-                ? "Authenticated"
-                : "Not Authenticated");
-
-        if (_isAuthenticated)
+        if (isAuthOpen)
         {
-            ImGui.Text($"User ID: {Settings.UserId}");
-            ImGui.Text($"Admin: {Settings.IsAdmin}");
-            ImGui.Text($"Token Expires: {DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry).LocalDateTime}");
+            ImGui.Indent();
 
-            if (ImGui.Button("Logout", new Vector2(buttonWidth, 24)))
+            // Status color indicator
+            var statusColor = _isAuthenticated
+                ? new Vector4(0, 1, 0, 1)
+                : new Vector4(1, 0, 0, 1);
+
+            ImGui.TextColored(statusColor,
+                _isAuthenticated
+                    ? "Authenticated"
+                    : "Not Authenticated");
+
+            if (_isAuthenticated)
             {
-                Settings.ClearTokens();
-                _isAuthenticated = false;
-                _statusMessage = "Logged out successfully";
+                ImGui.Text($"User ID: {Settings.UserId}");
+                ImGui.Text($"Admin: {Settings.IsAdmin}");
+                ImGui.Text($"Token Expires: {DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry).LocalDateTime}");
             }
+
+            // Authentication controls in a sub-section
+            if (ImGui.TreeNode("Authentication Controls"))
+            {
+                if (ImGui.Button("Open Login Page", new Vector2(buttonWidth, 24)))
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = $"{API_URL}{Routes.Auth.DiscordLogin}",
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _statusMessage = $"Failed to open login page: {ex.Message}";
+                    }
+                }
+
+                ImGui.PushItemWidth(inputWidth);
+                if (ImGui.InputText("New Auth Token", ref _newAuthToken, 2048))
+                {
+                    // Token input changed
+                }
+
+                ImGui.PopItemWidth();
+
+                if (ImGui.Button("Use New Auth Token", new Vector2(buttonWidth, 24)))
+                {
+                    _ = LoginWithNewTokenAsync();
+                }
+
+                ImGui.TreePop();
+            }
+
+            // Display status message
+            if (!string.IsNullOrEmpty(_statusMessage))
+            {
+                ImGui.TextColored(_statusMessage.StartsWith("Error:")
+                        ? new Vector4(1, 0, 0, 1)
+                        : new Vector4(0, 1, 0, 1),
+                    _statusMessage);
+            }
+
+            ImGui.Unindent();
         }
 
-        // Template Type Selector
+        ImGui.Separator();
+
+        // Template Type Selector (outside the auth section)
         var currentType = Settings.SelectedTemplateType.Value;
         if (ImGui.BeginCombo("Template Type", GetTemplateTypeDisplayName(currentType)))
         {
@@ -132,59 +181,14 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
                 Settings.SelectedTemplateType.Value = Routes.Types.ItemFilterLibrary;
                 RefreshCurrentArea();
             }
+
             if (ImGui.Selectable(GetTemplateTypeDisplayName(Routes.Types.WheresMyCraftAt), currentType == Routes.Types.WheresMyCraftAt))
             {
                 Settings.SelectedTemplateType.Value = Routes.Types.WheresMyCraftAt;
                 RefreshCurrentArea();
             }
+
             ImGui.EndCombo();
-        }
-
-        ImGui.Separator();
-
-        ImGui.Separator();
-
-        // Login section
-        if (!_isAuthenticated)
-        {
-            if (ImGui.Button("Open Login Page", new Vector2(buttonWidth, 24)))
-            {
-                try
-                {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = $"{API_URL}{Routes.Auth.DiscordLogin}",
-                        UseShellExecute = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    _statusMessage = $"Failed to open login page: {ex.Message}";
-                }
-            }
-        }
-
-        // Allow new auth token input even when authenticated
-        ImGui.PushItemWidth(inputWidth);
-        if (ImGui.InputText("New Auth Token", ref _newAuthToken, 2048))
-        {
-            // Token input changed
-        }
-
-        ImGui.PopItemWidth();
-
-        if (ImGui.Button("Use New Auth Token", new Vector2(buttonWidth, 24)))
-        {
-            _ = LoginWithNewTokenAsync();
-        }
-
-        // Display status message
-        if (!string.IsNullOrEmpty(_statusMessage))
-        {
-            ImGui.TextColored(_statusMessage.StartsWith("Error:")
-                    ? new Vector4(1, 0, 0, 1)
-                    : new Vector4(0, 1, 0, 1),
-                _statusMessage);
         }
     }
 
@@ -212,6 +216,7 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
                                 publicTemplates.CloseModals();
                             }
                         }
+
                         _previousAreaIndex = _selectedAreaIndex;
                         _selectedAreaIndex = i;
                     }

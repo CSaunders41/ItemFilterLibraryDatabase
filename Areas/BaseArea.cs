@@ -4,16 +4,10 @@ using System.Numerics;
 
 namespace ItemFilterLibraryDatabase.Areas;
 
-public abstract class BaseArea : IArea
+public abstract class BaseArea(ItemFilterLibraryDatabase plugin, ApiClient apiClient) : IArea
 {
-    protected readonly ApiClient ApiClient;
-    protected readonly ItemFilterLibraryDatabase Plugin;
-
-    protected BaseArea(ItemFilterLibraryDatabase plugin, ApiClient apiClient)
-    {
-        Plugin = plugin;
-        ApiClient = apiClient;
-    }
+    protected readonly ApiClient ApiClient = apiClient;
+    protected readonly ItemFilterLibraryDatabase Plugin = plugin;
 
     public abstract string Name { get; }
 
