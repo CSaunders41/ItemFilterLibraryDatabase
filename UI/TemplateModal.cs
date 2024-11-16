@@ -17,9 +17,6 @@ public enum TemplateModalMode
 
 public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient)
 {
-    // Batch creation properties
-    private int _batchCount = 1;
-    private int _batchProgress = 0;
 
     private string _changeNotes = string.Empty;
     private string _content = string.Empty;
@@ -44,15 +41,12 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
             _changeNotes = string.Empty;
             _versions.Clear();
             _selectedVersionIndex = 0;
-            _batchCount = 1;
-            _isBatchCreating = false;
-            _batchProgress = 0;
 
             if (mode == TemplateModalMode.Create)
             {
                 _name = string.Empty;
                 _content = string.Empty;
-                _isPublic = false;
+                _isPublic = true;
             }
             else
             {
@@ -116,24 +110,6 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
             {
                 ImGui.InputText("Change Notes", ref _changeNotes, 200);
             }
-
-            // Add batch creation UI only in Create mode
-            if (_mode == TemplateModalMode.Create)
-            {
-                ImGui.Separator();
-                ImGui.Text("Batch Creation");
-                ImGui.PushItemWidth(200);
-                ImGui.InputInt("Number of Copies", ref _batchCount);
-                ImGui.PopItemWidth();
-
-                // Clamp batch count to reasonable limits
-                _batchCount = Math.Max(1, Math.Min(1000, _batchCount));
-
-                if (_isBatchCreating)
-                {
-                    ImGui.ProgressBar((float)_batchProgress / _batchCount, new Vector2(-1, 0), $"Creating {_batchProgress}/{_batchCount}");
-                }
-            }
         }
         else
         {
@@ -182,9 +158,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
         }
         else
         {
-            var saveText = _mode == TemplateModalMode.Create && _batchCount > 1
-                ? $"Create {_batchCount} Templates"
-                : "Save";
+            var saveText = "Save";
 
             if (ImGui.Button(saveText) && !_isBatchCreating)
             {
@@ -244,12 +218,6 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
 
     private async void SaveTemplate()
     {
-        if (_mode == TemplateModalMode.Create && _batchCount > 1)
-        {
-            await BatchCreateTemplates();
-            return;
-        }
-
         try
         {
             plugin.IsLoading = true;
@@ -295,51 +263,6 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
         finally
         {
             plugin.IsLoading = false;
-        }
-    }
-
-    private async Task BatchCreateTemplates()
-    {
-        try
-        {
-            _isBatchCreating = true;
-            _batchProgress = 0;
-            _errorMessage = string.Empty;
-
-            for (var i = 0; i < _batchCount; i++)
-            {
-                var suffix = _batchCount > 1
-                    ? $" ({i + 1})"
-                    : "";
-
-                var createRequest = new Routes.Templates.RequestBodies.CreateTemplateRequest
-                {
-                    Name = _name + suffix,
-                    Content = _content,
-                    IsPublic = _isPublic
-                };
-
-                try
-                {
-                    await apiClient.PostAsync<ApiResponse<object>>(Routes.Templates.CreateTemplate(plugin.Settings.SelectedTemplateType.Value), createRequest);
-
-                    _batchProgress++;
-                }
-                catch (ApiException ex)
-                {
-                    _errorMessage = $"Error creating template {i + 1}: {ex.Message}";
-                    break;
-                }
-            }
-
-            if (_batchProgress == _batchCount)
-            {
-                _isOpen = false;
-            }
-        }
-        finally
-        {
-            _isBatchCreating = false;
         }
     }
 
