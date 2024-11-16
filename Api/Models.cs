@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.Encodings.Web;
-using System.Text.Json;
+﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace ItemFilterLibraryDatabase.Api;
@@ -45,7 +42,7 @@ public class TemplateInfo
     public bool IsPublic { get; set; }
 
     [JsonPropertyName("is_active")]
-    public bool ?IsActive { get; set; }
+    public bool? IsActive { get; set; }
 
     [JsonPropertyName("versions")]
     public List<TemplateVersion> Versions { get; set; }

@@ -12,7 +12,7 @@ public static class Routes
         public static class Requests
         {
             public static object CreateRefreshRequest(string refreshToken) =>
-                new { refresh_token = refreshToken };
+                new {refresh_token = refreshToken};
         }
     }
 

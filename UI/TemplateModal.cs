@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using System.Threading.Tasks;
 
 namespace ItemFilterLibraryDatabase.UI;
 
@@ -17,11 +16,9 @@ public enum TemplateModalMode
 
 public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient)
 {
-
     private string _changeNotes = string.Empty;
     private string _content = string.Empty;
     private string _errorMessage = string.Empty;
-    private bool _isBatchCreating = false;
     private bool _isOpen;
     private bool _isPublic;
     private TemplateModalMode _mode;
@@ -158,9 +155,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
         }
         else
         {
-            var saveText = "Save";
-
-            if (ImGui.Button(saveText) && !_isBatchCreating)
+            if (ImGui.Button("Save"))
             {
                 SaveTemplate();
             }

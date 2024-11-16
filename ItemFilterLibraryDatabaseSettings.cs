@@ -1,5 +1,6 @@
 ﻿using ExileCore.Shared.Interfaces;
 using ExileCore.Shared.Nodes;
+using ItemFilterLibraryDatabase.Api;
 using System;
 
 namespace ItemFilterLibraryDatabase;
@@ -19,7 +20,7 @@ public class ItemFilterLibraryDatabaseSettings : ISettings
     public bool IsAdmin { get; set; } = false;
 
     // Template type selection
-    public TextNode SelectedTemplateType { get; set; } = new TextNode(Api.Routes.Types.ItemFilterLibrary);
+    public TextNode SelectedTemplateType { get; set; } = new(Routes.Types.ItemFilterLibrary);
 
     public bool HasValidAccessToken =>
         !string.IsNullOrEmpty(AccessToken) && DateTimeOffset.FromUnixTimeSeconds(AccessTokenExpiry) > DateTimeOffset.UtcNow;
