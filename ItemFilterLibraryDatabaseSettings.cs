@@ -30,6 +30,8 @@ public class ItemFilterLibraryDatabaseSettings : ISettings
 
     public ToggleNode Debug { get; set; } = new(false);
 
+    public TextNode HostUrl { get; set; } = new TextNode("https://itemfilterlib.squirrelguff.xyz");
+
     public ToggleNode Enable { get; set; } = new(false);
 
     public void ClearTokens()

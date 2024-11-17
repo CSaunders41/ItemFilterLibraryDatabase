@@ -132,9 +132,9 @@ public class MyTemplatesArea : BaseArea
         if (ImGui.BeginTable("my_templates", 5, flags))
         {
             ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Version", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
-            ImGui.TableSetupColumn("Updated", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 100);
             ImGui.TableSetupColumn("Public", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
+            ImGui.TableSetupColumn("Updated", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 100);
+            ImGui.TableSetupColumn("Version", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
             ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed, 240);
             ImGui.TableHeadersRow();
 
@@ -154,24 +154,26 @@ public class MyTemplatesArea : BaseArea
 
             foreach (var template in pageTemplates)
             {
+                ImGui.PushID($"actions_{template.TemplateId}");
                 ImGui.TableNextRow();
 
                 ImGui.TableNextColumn();
                 ImGui.Text(template.Name);
 
                 ImGui.TableNextColumn();
-                ImGui.Text(template.Version.ToString());
+
+                if (ImGui.Button(template.IsPublic ? "Public" : "Private", new Vector2(-1, 0)))
+                {
+                    ToggleTemplateVisibility(template.TemplateId, !template.IsPublic);
+                }
 
                 ImGui.TableNextColumn();
                 ImGui.Text(FormatTimeAgo(template.UpdatedAt));
 
                 ImGui.TableNextColumn();
-                ImGui.Text(template.IsPublic
-                    ? "Yes"
-                    : "No");
+                ImGui.Text(template.Version.ToString());
 
                 ImGui.TableNextColumn();
-                ImGui.PushID($"actions_{template.TemplateId}");
 
                 var buttonWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X * 2) / 3;
                 if (ImGui.Button("Edit", new Vector2(buttonWidth, 0)))
@@ -195,6 +197,31 @@ public class MyTemplatesArea : BaseArea
             }
 
             ImGui.EndTable();
+        }
+    }
+
+    private async void ToggleTemplateVisibility(string templateId, bool isPublic)
+    {
+        try
+        {
+            Plugin.IsLoading = true;
+            _errorMessage = string.Empty;
+
+            await ApiClient.PatchAsync<ApiResponse<object>>(
+                Routes.Templates.ToggleVisibility(Plugin.Settings.SelectedTemplateType, templateId),
+                new { is_public = isPublic }
+            );
+
+            // Refresh the templates to show the updated state
+            RefreshTemplates();
+        }
+        catch (ApiException ex)
+        {
+            _errorMessage = $"Error: Failed to update template visibility - {ex.Message}";
+        }
+        finally
+        {
+            Plugin.IsLoading = false;
         }
     }
 

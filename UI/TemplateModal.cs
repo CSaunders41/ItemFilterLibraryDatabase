@@ -101,7 +101,6 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
         if (_mode != TemplateModalMode.View)
         {
             ImGui.InputText("Name", ref _name, 100);
-            ImGui.Checkbox("Public", ref _isPublic);
 
             if (_mode == TemplateModalMode.Edit)
             {
@@ -224,7 +223,6 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
                 {
                     Name = _name,
                     Content = _content,
-                    IsPublic = _isPublic
                 };
 
                 await apiClient.PostAsync<ApiResponse<object>>(Routes.Templates.CreateTemplate(plugin.Settings.SelectedTemplateType), createRequest);
@@ -235,7 +233,6 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
                 {
                     Name = _name,
                     Content = _content,
-                    IsPublic = _isPublic,
                     ChangeNotes = string.IsNullOrEmpty(_changeNotes)
                         ? "Updated via plugin"
                         : _changeNotes

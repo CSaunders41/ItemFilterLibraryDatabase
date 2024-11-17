@@ -134,14 +134,15 @@ public class PublicTemplatesArea : BaseArea
     {
         var flags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY;
 
-        if (ImGui.BeginTable("public_templates", 5, flags))
+        if (ImGui.BeginTable("public_templates", 6, flags))
         {
             // Setup columns
             ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Author", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 130);
+            ImGui.TableSetupColumn("Public", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
             ImGui.TableSetupColumn("Updated", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 100);
             ImGui.TableSetupColumn("Version", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
-            ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed, 160);
+            ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed, 240);
             ImGui.TableHeadersRow();
 
             // Handle sorting
@@ -167,6 +168,11 @@ public class PublicTemplatesArea : BaseArea
 
                 ImGui.TableNextColumn();
                 ImGui.Text(template.CreatorName);
+
+                ImGui.TableNextColumn();
+                ImGui.Text(template.IsPublic
+                    ? "Yes"
+                    : "No");
 
                 ImGui.TableNextColumn();
                 ImGui.Text(FormatTimeAgo(template.UpdatedAt));

@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Ionic.Zlib;
+using System;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -6,7 +8,6 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,9 +17,9 @@ public class ApiClient : IDisposable
 {
     private readonly string _baseUrl;
     private readonly HttpClient _httpClient;
+    private readonly JsonSerializerOptions _jsonOptions;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private bool _disposed;
-    private bool _isInitialized;
 
     public ApiClient(string baseUrl)
     {
@@ -29,6 +30,13 @@ public class ApiClient : IDisposable
             Timeout = TimeSpan.FromSeconds(30)
         };
 
+        _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
+        _httpClient.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
+
         DebugLog($"ApiClient initialized with base URL: {_baseUrl}");
 
         if (ItemFilterLibraryDatabase.Main.Settings.HasValidAccessToken)
@@ -38,7 +46,7 @@ public class ApiClient : IDisposable
         }
     }
 
-    public bool IsInitialized => _isInitialized;
+    public bool IsInitialized { get; private set; }
 
     public void Dispose()
     {
@@ -63,10 +71,11 @@ public class ApiClient : IDisposable
                 var isValid = await TestAuthAsync();
                 if (isValid)
                 {
-                    _isInitialized = true;
+                    IsInitialized = true;
                     DebugLog("Access token validated successfully");
                     return true;
                 }
+
                 DebugLog("Access token failed validation");
             }
             else
@@ -82,10 +91,11 @@ public class ApiClient : IDisposable
                 var refreshSuccess = await RefreshTokenAsync();
                 if (refreshSuccess)
                 {
-                    _isInitialized = true;
+                    IsInitialized = true;
                     DebugLog("Successfully refreshed token and initialized");
                     return true;
                 }
+
                 DebugLog("Failed to refresh token");
             }
             else
@@ -96,14 +106,14 @@ public class ApiClient : IDisposable
             // If we get here, both token attempts failed
             DebugLog("All authentication attempts failed");
             ClearAllTokens();
-            _isInitialized = false;
+            IsInitialized = false;
             return false;
         }
         catch (Exception ex)
         {
             DebugLog($"Initialization failed with exception: {ex}");
             ClearAllTokens();
-            _isInitialized = false;
+            IsInitialized = false;
             return false;
         }
     }
@@ -118,8 +128,7 @@ public class ApiClient : IDisposable
             var jsonString = Encoding.UTF8.GetString(Convert.FromBase64String(encodedAuthData));
             var authData = JsonSerializer.Deserialize<AuthData>(jsonString);
 
-            if (string.IsNullOrEmpty(authData?.Tokens?.Access?.Token) ||
-                string.IsNullOrEmpty(authData?.Tokens?.Refresh?.Token))
+            if (string.IsNullOrEmpty(authData?.Tokens?.Access?.Token) || string.IsNullOrEmpty(authData?.Tokens?.Refresh?.Token))
             {
                 DebugLog("Invalid token data - tokens are null or empty");
                 throw new ApiException("Invalid token data");
@@ -143,14 +152,14 @@ public class ApiClient : IDisposable
             }
 
             // 5. Set initialized state
-            _isInitialized = true;
+            IsInitialized = true;
             DebugLog("Login completed successfully");
         }
         catch (Exception ex)
         {
             DebugLog($"Login failed: {ex}");
             ClearAllTokens();
-            _isInitialized = false;
+            IsInitialized = false;
             throw new ApiException("Login failed", ex);
         }
     }
@@ -171,8 +180,7 @@ public class ApiClient : IDisposable
             if (response.Data.User != null)
             {
                 ItemFilterLibraryDatabase.Main.Settings.UserId = response.Data.User.Id;
-                ItemFilterLibraryDatabase.Main.Settings.IsAdmin = response.Data.User.IsAdmin;
-                DebugLog($"Updated user info - ID: {response.Data.User.Id}, Admin: {response.Data.User.IsAdmin}");
+                DebugLog($"Updated user info - ID: {response.Data.User.Id}");
             }
 
             return response.Data.Status == "connected";
@@ -244,6 +252,7 @@ public class ApiClient : IDisposable
                                 return await DeserializeResponseAsync<T>(response, cancellationToken);
                             }
                         }
+
                         break;
 
                     case ErrorCodes.AUTH_REFRESH_ERROR:
@@ -265,6 +274,7 @@ public class ApiClient : IDisposable
                                 }
                             }
                         }
+
                         ClearAccessToken();
                         break;
                 }
@@ -288,13 +298,30 @@ public class ApiClient : IDisposable
         using var request = new HttpRequestMessage(method, endpoint);
         if (data != null)
         {
-            DebugLog($"Adding request body for {endpoint}");
-            request.Content = JsonContent.Create(data, options: new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            var jsonContent = JsonSerializer.Serialize(data, _jsonOptions);
+            DebugLog($"Request body: {jsonContent}");
+
+            // Compress if content is larger than 1KB
+            if (jsonContent.Length > 1024)
+            {
+                var compressedContent = CompressContent(jsonContent);
+                var content = new ByteArrayContent(compressedContent);
+                content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                content.Headers.ContentEncoding.Add("deflate");
+                request.Content = content;
+            }
+            else
+            {
+                request.Content = JsonContent.Create(data, options: _jsonOptions);
+            }
         }
 
         try
         {
-            var attempt = isRetry ? "retry" : "initial";
+            var attempt = isRetry
+                ? "retry"
+                : "initial";
+
             DebugLog($"Sending {attempt} request to {endpoint}");
             return await _httpClient.SendAsync(request, cancellationToken);
         }
@@ -304,6 +331,8 @@ public class ApiClient : IDisposable
             throw new ApiException($"Failed to {(isRetry ? "retry" : "send")} request: {endpoint}", ex);
         }
     }
+
+
 
     private async Task<bool> RefreshTokenAsync(CancellationToken cancellationToken = default)
     {
@@ -316,98 +345,96 @@ public class ApiClient : IDisposable
         try
         {
             return await Task.Run(async () =>
-            {
-                await _refreshLock.WaitAsync(cancellationToken);
-                try
                 {
-                    // Store and remove current auth header
-                    var currentAuth = _httpClient.DefaultRequestHeaders.Authorization;
-                    _httpClient.DefaultRequestHeaders.Authorization = null;
-
-                    while (true) // Loop to handle rate limit retries
+                    await _refreshLock.WaitAsync(cancellationToken);
+                    try
                     {
-                        try
+                        // Store and remove current auth header
+                        var currentAuth = _httpClient.DefaultRequestHeaders.Authorization;
+                        _httpClient.DefaultRequestHeaders.Authorization = null;
+
+                        while (true) // Loop to handle rate limit retries
                         {
-                            DebugLog("Sending refresh token request");
-                            using var request = new HttpRequestMessage(HttpMethod.Post, Routes.Auth.Refresh);
-                            request.Content = JsonContent.Create(
-                                new { refresh_token = ItemFilterLibraryDatabase.Main.Settings.RefreshToken },
-                                options: new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
-                            );
-
-                            using var response = await _httpClient.SendAsync(request, cancellationToken);
-
-                            if (response.IsSuccessStatusCode)
+                            try
                             {
-                                var content = await response.Content.ReadAsStringAsync(cancellationToken);
-                                var refreshResponse = JsonSerializer.Deserialize<ApiResponse<AuthData>>(content);
+                                DebugLog("Sending refresh token request");
+                                using var request = new HttpRequestMessage(HttpMethod.Post, Routes.Auth.Refresh);
+                                request.Content = JsonContent.Create(new {refresh_token = ItemFilterLibraryDatabase.Main.Settings.RefreshToken},
+                                    options: new JsonSerializerOptions {PropertyNamingPolicy = JsonNamingPolicy.CamelCase});
 
-                                if (refreshResponse?.Data == null)
+                                using var response = await _httpClient.SendAsync(request, cancellationToken);
+
+                                if (response.IsSuccessStatusCode)
                                 {
-                                    DebugLog("Refresh response contained no data");
-                                    return false;
+                                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                                    var refreshResponse = JsonSerializer.Deserialize<ApiResponse<AuthData>>(content);
+
+                                    if (refreshResponse?.Data == null)
+                                    {
+                                        DebugLog("Refresh response contained no data");
+                                        return false;
+                                    }
+
+                                    DebugLog("Storing refreshed auth data");
+                                    StoreAuthData(refreshResponse.Data);
+                                    _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ItemFilterLibraryDatabase.Main.Settings.AccessToken);
+                                    DebugLog("Token refresh completed successfully");
+                                    return true;
                                 }
 
-                                DebugLog("Storing refreshed auth data");
-                                StoreAuthData(refreshResponse.Data);
-                                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ItemFilterLibraryDatabase.Main.Settings.AccessToken);
-                                DebugLog("Token refresh completed successfully");
-                                return true;
-                            }
-
-                            if (response.StatusCode == HttpStatusCode.TooManyRequests)
-                            {
-                                // Get retry-after value
-                                if (response.Headers.TryGetValues("retry-after", out var retryValues) &&
-                                    int.TryParse(retryValues.FirstOrDefault(), out var retrySeconds))
+                                if (response.StatusCode == HttpStatusCode.TooManyRequests)
                                 {
-                                    // Add 1 second buffer
-                                    retrySeconds += 1;
-                                    DebugLog($"Rate limit hit. Waiting {retrySeconds} seconds before retry");
+                                    // Get retry-after value
+                                    if (response.Headers.TryGetValues("retry-after", out var retryValues) && int.TryParse(retryValues.FirstOrDefault(), out var retrySeconds))
+                                    {
+                                        // Add 1 second buffer
+                                        retrySeconds += 1;
+                                        DebugLog($"Rate limit hit. Waiting {retrySeconds} seconds before retry");
 
-                                    try
-                                    {
-                                        await Task.Delay(TimeSpan.FromSeconds(retrySeconds), cancellationToken);
-                                        // Continue the loop to retry
-                                        continue;
+                                        try
+                                        {
+                                            await Task.Delay(TimeSpan.FromSeconds(retrySeconds), cancellationToken);
+                                            // Continue the loop to retry
+                                            continue;
+                                        }
+                                        catch (OperationCanceledException)
+                                        {
+                                            DebugLog("Refresh token retry was cancelled");
+                                            return false;
+                                        }
                                     }
-                                    catch (OperationCanceledException)
+                                }
+                                else if (response.StatusCode == HttpStatusCode.Unauthorized)
+                                {
+                                    var error = await DeserializeResponseAsync<ApiErrorResponse>(response, cancellationToken);
+                                    if (error?.Error?.Code == ErrorCodes.AUTH_REFRESH_ERROR)
                                     {
-                                        DebugLog("Refresh token retry was cancelled");
+                                        DebugLog("Refresh token is invalid");
+                                        ClearAllTokens();
                                         return false;
                                     }
                                 }
-                            }
-                            else if (response.StatusCode == HttpStatusCode.Unauthorized)
-                            {
-                                var error = await DeserializeResponseAsync<ApiErrorResponse>(response, cancellationToken);
-                                if (error?.Error?.Code == ErrorCodes.AUTH_REFRESH_ERROR)
-                                {
-                                    DebugLog("Refresh token is invalid");
-                                    ClearAllTokens();
-                                    return false;
-                                }
-                            }
 
-                            // If we get here, something else went wrong
-                            var contentWrong = await response.Content.ReadAsStringAsync(cancellationToken);
-                            DebugLog($"Refresh failed with status {response.StatusCode}: {contentWrong}");
-                            return false;
-                        }
-                        catch (Exception ex) when (ex is not OperationCanceledException)
-                        {
-                            DebugLog($"Token refresh failed with error: {ex}");
-                            _httpClient.DefaultRequestHeaders.Authorization = currentAuth;
-                            return false;
+                                // If we get here, something else went wrong
+                                var contentWrong = await response.Content.ReadAsStringAsync(cancellationToken);
+                                DebugLog($"Refresh failed with status {response.StatusCode}: {contentWrong}");
+                                return false;
+                            }
+                            catch (Exception ex) when (ex is not OperationCanceledException)
+                            {
+                                DebugLog($"Token refresh failed with error: {ex}");
+                                _httpClient.DefaultRequestHeaders.Authorization = currentAuth;
+                                return false;
+                            }
                         }
                     }
-                }
-                finally
-                {
-                    _refreshLock.Release();
-                    DebugLog("Released refresh lock");
-                }
-            }, cancellationToken);
+                    finally
+                    {
+                        _refreshLock.Release();
+                        DebugLog("Released refresh lock");
+                    }
+                },
+                cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -448,7 +475,7 @@ public class ApiClient : IDisposable
         DebugLog("Clearing access token");
         ItemFilterLibraryDatabase.Main.Settings.AccessToken = string.Empty;
         _httpClient.DefaultRequestHeaders.Authorization = null;
-        _isInitialized = false;
+        IsInitialized = false;
     }
 
     private void ClearAllTokens()
@@ -456,14 +483,14 @@ public class ApiClient : IDisposable
         DebugLog("Clearing all tokens");
         ItemFilterLibraryDatabase.Main.Settings.ClearTokens();
         _httpClient.DefaultRequestHeaders.Authorization = null;
-        _isInitialized = false;
+        IsInitialized = false;
     }
 
     private async Task<T> DeserializeResponseAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         try
         {
-            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            var content = await GetResponseContentAsync(response, cancellationToken);
             DebugLog($"Raw response content: {content}");
             return JsonSerializer.Deserialize<T>(content);
         }
@@ -491,38 +518,56 @@ public class ApiClient : IDisposable
         }
     }
 
+    private async Task<string> GetResponseContentAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var contentBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var contentEncoding = response.Content.Headers.ContentEncoding;
+
+        if (contentEncoding.Contains("deflate"))
+        {
+            using var compressedStream = new MemoryStream(contentBytes);
+            using var resultStream = new MemoryStream();
+
+            await using (var zlibStream = new ZlibStream(compressedStream, CompressionMode.Decompress))
+            {
+                await zlibStream.CopyToAsync(resultStream, cancellationToken);
+            }
+
+            var decompressedBytes = resultStream.ToArray();
+            DebugLog($"Decompressed response: {contentBytes.Length:N0} -> {decompressedBytes.Length:N0} bytes");
+            return Encoding.UTF8.GetString(decompressedBytes);
+        }
+
+        return Encoding.UTF8.GetString(contentBytes);
+    }
+
+    public async Task<T> PatchAsync<T>(string endpoint, object data = null, CancellationToken cancellationToken = default)
+    {
+        DebugLog($"PATCH request to: {endpoint}");
+        return await SendRequestAsync<T>(HttpMethod.Patch, endpoint, data, cancellationToken);
+    }
+
+    private byte[] CompressContent(string content)
+    {
+        var contentBytes = Encoding.UTF8.GetBytes(content);
+
+        using var memoryStream = new MemoryStream();
+        using (var zlibStream = new ZlibStream(memoryStream, CompressionMode.Compress, CompressionLevel.BestSpeed))
+        {
+            zlibStream.Write(contentBytes, 0, contentBytes.Length);
+        }
+
+        var compressedBytes = memoryStream.ToArray();
+        DebugLog($"Compressed request: {contentBytes.Length:N0} -> {compressedBytes.Length:N0} bytes " + $"({(float)compressedBytes.Length / contentBytes.Length:P1})");
+
+        return compressedBytes;
+    }
+
     private void DebugLog(string message)
     {
         if (ItemFilterLibraryDatabase.Main.Settings.Debug)
         {
             ItemFilterLibraryDatabase.Main.LogMessage($"[ApiClient] {message}");
         }
-    }
-
-    private class TestAuthApiResponse
-    {
-        [JsonPropertyName("data")]
-        public TestAuthResponseData Data { get; set; }
-    }
-
-    private class TestAuthResponseData
-    {
-        [JsonPropertyName("status")]
-        public string Status { get; set; }
-
-        [JsonPropertyName("user")]
-        public TestAuthUserInfo User { get; set; }
-
-        [JsonPropertyName("tokenExpiry")]
-        public long TokenExpiry { get; set; }
-    }
-
-    private class TestAuthUserInfo
-    {
-        [JsonPropertyName("id")]
-        public string Id { get; set; }
-
-        [JsonPropertyName("isAdmin")]
-        public bool IsAdmin { get; set; }
     }
 }

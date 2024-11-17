@@ -15,7 +15,6 @@ namespace ItemFilterLibraryDatabase;
 
 public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDatabaseSettings>
 {
-    private const string API_URL = "https://itemfilterlib.squirrelguff.xyz";
     private readonly List<IArea> _areas = [];
     private readonly object _lockObject = new();
     private ApiClient _apiClient;
@@ -43,7 +42,7 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
         try
         {
             DebugLog("Starting plugin initialization");
-            _apiClient = new ApiClient(API_URL);
+            _apiClient = new ApiClient(Settings.HostUrl.Value);
             _initializationSource = new TaskCompletionSource<bool>();
 
             // Start the initialization process asynchronously
@@ -195,6 +194,8 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
         {
             ImGui.Text($"User ID: {Settings.UserId}");
             ImGui.Text($"Admin: {Settings.IsAdmin}");
+
+
             if (DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry) < DateTimeOffset.Now)
             {
                 ImGui.TextColored(Color.Red.ToImguiVec4(), $"Auth Token Expired: {DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry).LocalDateTime}");
@@ -203,6 +204,7 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
             {
                 ImGui.Text($"Auth Token Expires: {DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry).LocalDateTime}");
             }
+
             if (DateTimeOffset.FromUnixTimeSeconds(Settings.RefreshTokenExpiry) < DateTimeOffset.Now)
             {
                 ImGui.TextColored(Color.Red.ToImguiVec4(), $"Refresh Token Expired: {DateTimeOffset.FromUnixTimeSeconds(Settings.RefreshTokenExpiry).LocalDateTime}");
@@ -224,7 +226,7 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
                     {
                         Process.Start(new ProcessStartInfo
                         {
-                            FileName = $"{API_URL}{Routes.Auth.DiscordLogin}",
+                            FileName = $"{Settings.HostUrl.Value}{Routes.Auth.DiscordLogin}",
                             UseShellExecute = true
                         });
                     }
