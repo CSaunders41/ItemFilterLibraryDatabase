@@ -1,5 +1,7 @@
 ﻿using ImGuiNET;
 using ItemFilterLibraryDatabase.Api;
+using ItemFilterLibraryDatabase.Api.Models;
+using ItemFilterLibraryDatabase.Api.Models.ItemFilterLibraryDatabase.Api.Models;
 using ItemFilterLibraryDatabase.UI;
 using ItemFilterLibraryDatabase.Utilities;
 using System;
@@ -12,16 +14,15 @@ namespace ItemFilterLibraryDatabase.Areas;
 public class PublicTemplatesArea : BaseArea
 {
     private const float SearchDelayDuration = 0.5f;
-    private const int ItemsPerPage = 40;
-    private readonly List<TemplateInfo> _allTemplates = [];
+    private readonly List<Template> _allTemplates = [];
     private readonly SortState _sortState = new() { Column = SortColumn.Updated, Ascending = false };
     private readonly TemplateModal _templateModal;
     private int _currentPage = 1;
     private string _errorMessage = string.Empty;
-    private List<TemplateInfo> _filteredTemplates = [];
+    private List<Template> _filteredTemplates = [];
     private bool _initialLoadComplete = false;
     private bool _isLoadingBackground = false;
-    private int _totalPages = 1;
+    private PaginationInfo _paginationInfo = new();
     private float _searchDelay = 0;
     private string _searchText = string.Empty;
 
@@ -55,33 +56,33 @@ public class PublicTemplatesArea : BaseArea
         ImGui.SameLine();
         if (ImGui.Button("Refresh") && !_isLoadingBackground)
         {
-            LoadTemplates();
+            LoadTemplates(true);
         }
 
         if (_isLoadingBackground)
         {
             ImGui.SameLine();
-            ImGui.Text($"Loading... ({_currentPage}/{_totalPages} pages)");
+            ImGui.Text($"Loading... (Page {_currentPage})");
         }
 
         ShowError(_errorMessage);
 
         if (_filteredTemplates.Count > 0)
         {
-            var totalPages = (_filteredTemplates.Count + ItemsPerPage - 1) / ItemsPerPage;
-
-            if (ImGui.Button("Previous") && _currentPage > 1)
+            if (ImGui.Button("Previous") && _paginationInfo.HasPreviousPage)
             {
-                _currentPage--;
+                _currentPage = _paginationInfo.PreviousPage;
+                LoadTemplates(false);
             }
 
             ImGui.SameLine();
-            ImGui.Text($"Page {_currentPage} of {totalPages}");
+            ImGui.Text($"Page {_currentPage} of {_paginationInfo.LastPage}");
 
             ImGui.SameLine();
-            if (ImGui.Button("Next") && _currentPage < totalPages)
+            if (ImGui.Button("Next") && _paginationInfo.HasNextPage)
             {
-                _currentPage++;
+                _currentPage = _paginationInfo.NextPage;
+                LoadTemplates(false);
             }
 
             ImGui.SameLine();
@@ -89,7 +90,7 @@ public class PublicTemplatesArea : BaseArea
             ImGui.Dummy(new Vector2(spacing, 0));
             ImGui.SameLine();
 
-            ImGui.Text($"Total templates: {_filteredTemplates.Count}");
+            ImGui.Text($"Total templates: {_paginationInfo.TotalItems}");
             ImGui.Separator();
         }
 
@@ -146,10 +147,7 @@ public class PublicTemplatesArea : BaseArea
                 sortSpecs.SpecsDirty = false;
             }
 
-            var startIndex = (_currentPage - 1) * ItemsPerPage;
-            var pageTemplates = _filteredTemplates.Skip(startIndex).Take(ItemsPerPage).ToList();
-
-            foreach (var template in pageTemplates)
+            foreach (var template in _filteredTemplates)
             {
                 ImGui.TableNextRow();
 
@@ -198,12 +196,13 @@ public class PublicTemplatesArea : BaseArea
         }
         else
         {
-            _filteredTemplates = _allTemplates.Where(template => FuzzyMatcher.FuzzyMatch(_searchText, template.Name))
-                .OrderByDescending(template => FuzzyMatcher.GetMatchScore(_searchText, template.Name)).ToList();
+            _filteredTemplates = _allTemplates
+                .Where(template => FuzzyMatcher.FuzzyMatch(_searchText, template.Name))
+                .OrderByDescending(template => FuzzyMatcher.GetMatchScore(_searchText, template.Name))
+                .ToList();
         }
 
         ApplySort();
-        _currentPage = 1;
     }
 
     private void ApplySort()
@@ -292,18 +291,19 @@ public class PublicTemplatesArea : BaseArea
                 _currentPage = 1;
             }
 
-            var response = await ApiClient.GetAsync<ApiResponse<TemplateListResponse>>(
+            // Note: The response comes directly as PublicTemplateListResponse, not wrapped in ApiResponse
+            var response = await ApiClient.GetAsync<PublicTemplateListResponse>(
                 Routes.Templates.GetAllTemplates(
                     Plugin.Settings.SelectedTemplateType,
-                    _currentPage,
-                    ItemsPerPage
+                    _currentPage
                 )
             );
 
-            if (response?.Data?.Templates != null)
+            if (response?.Templates != null)
             {
-                _allTemplates.AddRange(response.Data.Templates);
-                _totalPages = response.Data.TotalPages;
+                _allTemplates.Clear();
+                _allTemplates.AddRange(response.Templates);
+                _paginationInfo = response.Pagination;
                 _initialLoadComplete = true;
                 FilterTemplates();
             }
@@ -330,7 +330,7 @@ public class PublicTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailInfo>>(
+            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailed>>(
                 Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true)
             );
 
@@ -341,7 +341,7 @@ public class PublicTemplatesArea : BaseArea
         }
         catch (ApiException ex)
         {
-            _errorMessage = $"Error: Failed to copy template - {ex.Message}";
+            _errorMessage = $"Error: Failed to copy Template - {ex.Message}";
         }
         finally
         {

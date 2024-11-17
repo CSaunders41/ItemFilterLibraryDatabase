@@ -1,4 +1,5 @@
 ﻿using Ionic.Zlib;
+using ItemFilterLibraryDatabase.Api.Models;
 using System;
 using System.IO;
 using System.Linq;

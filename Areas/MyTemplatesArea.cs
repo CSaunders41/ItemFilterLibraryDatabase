@@ -1,5 +1,6 @@
 ﻿using ImGuiNET;
 using ItemFilterLibraryDatabase.Api;
+using ItemFilterLibraryDatabase.Api.Models;
 using ItemFilterLibraryDatabase.UI;
 using ItemFilterLibraryDatabase.Utilities;
 using System;
@@ -15,10 +16,10 @@ public class MyTemplatesArea : BaseArea
     private const float SearchDelayDuration = 0.5f;
     private readonly SortState _sortState = new() { Column = SortColumn.Updated, Ascending = false };
     private readonly TemplateModal _templateModal;
-    private List<TemplateInfo> _allTemplates = [];
+    private List<Template> _allTemplates = [];
     private int _currentPage = 1;
     private string _errorMessage = string.Empty;
-    private List<TemplateInfo> _filteredTemplates = [];
+    private List<Template> _filteredTemplates = [];
     private bool _isRefreshing = false;
     private float _searchDelay = 0;
     private string _searchText = string.Empty;
@@ -66,7 +67,7 @@ public class MyTemplatesArea : BaseArea
 
         ShowError(_errorMessage);
 
-        // Pagination controls
+        // PublicPagination controls
         if (_filteredTemplates.Count > 0)
         {
             var totalPages = (_filteredTemplates.Count + ItemsPerPage - 1) / ItemsPerPage;
@@ -292,7 +293,7 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<List<TemplateInfo>>>(
+            var response = await ApiClient.GetAsync<ApiResponse<List<Template>>>(
                 Routes.Templates.GetMyTemplates(Plugin.Settings.SelectedTemplateType)
             );
 
@@ -319,7 +320,7 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailInfo>>(
+            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailed>>(
                 Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true)
             );
 
@@ -330,7 +331,7 @@ public class MyTemplatesArea : BaseArea
         }
         catch (ApiException ex)
         {
-            _errorMessage = $"Error: Failed to copy template - {ex.Message}";
+            _errorMessage = $"Error: Failed to copy Template - {ex.Message}";
         }
         finally
         {
@@ -354,7 +355,7 @@ public class MyTemplatesArea : BaseArea
         }
         catch (ApiException ex)
         {
-            _errorMessage = $"Error: Failed to update template visibility - {ex.Message}";
+            _errorMessage = $"Error: Failed to update Template visibility - {ex.Message}";
         }
         finally
         {
@@ -377,7 +378,7 @@ public class MyTemplatesArea : BaseArea
         }
         catch (ApiException ex)
         {
-            _errorMessage = $"Error: Failed to delete template - {ex.Message}";
+            _errorMessage = $"Error: Failed to delete Template - {ex.Message}";
         }
         finally
         {

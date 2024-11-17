@@ -1,5 +1,6 @@
 ﻿using ImGuiNET;
 using ItemFilterLibraryDatabase.Api;
+using ItemFilterLibraryDatabase.Api.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,7 +26,7 @@ public class TemplateModal
     private TemplateModalMode _mode;
     private string _name = string.Empty;
     private int _selectedVersionIndex = 0;
-    private TemplateInfo _template;
+    private Template _template;
     private List<TemplateVersion> _versions = [];
 
     public TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient)
@@ -34,7 +35,7 @@ public class TemplateModal
         _apiClient = apiClient;
     }
 
-    public void Show(TemplateInfo template, TemplateModalMode mode)
+    public void Show(Template template, TemplateModalMode mode)
     {
         try
         {
@@ -174,7 +175,7 @@ public class TemplateModal
             _plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await _apiClient.GetAsync<ApiResponse<TemplateDetailInfo>>(Routes.Templates.GetTemplate(_plugin.Settings.SelectedTemplateType, _template.TemplateId, true));
+            var response = await _apiClient.GetAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.GetTemplate(_plugin.Settings.SelectedTemplateType, _template.TemplateId, true));
 
             if (response?.Data != null)
             {
@@ -190,7 +191,7 @@ public class TemplateModal
         }
         catch (ApiException ex)
         {
-            _errorMessage = $"Error: Failed to load template - {ex.Message}";
+            _errorMessage = $"Error: Failed to load Template - {ex.Message}";
             _content = string.Empty;
         }
         finally
@@ -214,7 +215,7 @@ public class TemplateModal
                     Content = _content
                 };
 
-                await _apiClient.PostAsync<ApiResponse<TemplateDetailInfo>>(Routes.Templates.CreateTemplate(_plugin.Settings.SelectedTemplateType), createRequest);
+                await _apiClient.PostAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.CreateTemplate(_plugin.Settings.SelectedTemplateType), createRequest);
             }
             else
             {
@@ -224,14 +225,14 @@ public class TemplateModal
                     Content = _content
                 };
 
-                await _apiClient.PutAsync<ApiResponse<TemplateDetailInfo>>(Routes.Templates.UpdateTemplate(_plugin.Settings.SelectedTemplateType, _template.TemplateId), updateRequest);
+                await _apiClient.PutAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.UpdateTemplate(_plugin.Settings.SelectedTemplateType, _template.TemplateId), updateRequest);
             }
 
             _isOpen = false;
         }
         catch (ApiException ex)
         {
-            _errorMessage = $"Error: Failed to save template - {ex.Message}";
+            _errorMessage = $"Error: Failed to save Template - {ex.Message}";
         }
         finally
         {

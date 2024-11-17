@@ -19,29 +19,29 @@ public static class Routes
 
         public static string GetTypes => $"{Base}/types";
 
-        public static string GetAllTemplates(string typeId, int page = 1, int limit = 20) =>
-            $"{Base}/{typeId}/templates?page={page}&limit={limit}";
+        public static string GetAllTemplates(string typeId, int page = 1) =>
+            $"{Base}/{typeId}/templates?page={page}";
 
         public static string GetMyTemplates(string typeId) =>
             $"{Base}/{typeId}/my";
 
         public static string GetTemplate(string typeId, string templateId, bool includeAllVersions = false) =>
-            $"{Base}/{typeId}/template/{templateId}{(includeAllVersions ? "?includeAllVersions=true" : "")}";
+            $"{Base}/{typeId}/Template/{templateId}{(includeAllVersions ? "?includeAllVersions=true" : "")}";
 
         public static string CreateTemplate(string typeId) =>
             $"{Base}/{typeId}/create";
 
         public static string UpdateTemplate(string typeId, string templateId) =>
-            $"{Base}/{typeId}/template/{templateId}";
+            $"{Base}/{typeId}/Template/{templateId}";
 
         public static string ToggleVisibility(string typeId, string templateId) =>
-            $"{Base}/{typeId}/template/{templateId}/visibility";
+            $"{Base}/{typeId}/Template/{templateId}/visibility";
 
         public static string DeleteTemplate(string typeId, string templateId) =>
-            $"{Base}/{typeId}/template/{templateId}";
+            $"{Base}/{typeId}/Template/{templateId}";
 
         public static string HardDeleteTemplate(string typeId, string templateId) =>
-            $"{Base}/{typeId}/template/{templateId}/hard";
+            $"{Base}/{typeId}/Template/{templateId}/hard";
 
         public static class RequestBodies
         {
