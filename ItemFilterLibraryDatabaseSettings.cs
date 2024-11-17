@@ -20,13 +20,15 @@ public class ItemFilterLibraryDatabaseSettings : ISettings
     public bool IsAdmin { get; set; } = false;
 
     // Template type selection
-    public TextNode SelectedTemplateType { get; set; } = new(Routes.Types.ItemFilterLibrary);
+    public string SelectedTemplateType { get; set; } = new(Routes.Types.ItemFilterLibrary);
 
     public bool HasValidAccessToken =>
         !string.IsNullOrEmpty(AccessToken) && DateTimeOffset.FromUnixTimeSeconds(AccessTokenExpiry) > DateTimeOffset.UtcNow;
 
     public bool HasValidRefreshToken =>
         !string.IsNullOrEmpty(RefreshToken) && DateTimeOffset.FromUnixTimeSeconds(RefreshTokenExpiry) > DateTimeOffset.UtcNow;
+
+    public ToggleNode Debug { get; set; } = new(false);
 
     public ToggleNode Enable { get; set; } = new(false);
 

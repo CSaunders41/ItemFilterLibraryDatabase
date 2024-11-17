@@ -1,6 +1,7 @@
 ﻿using ImGuiNET;
 using ItemFilterLibraryDatabase.Api;
 using ItemFilterLibraryDatabase.UI;
+using ItemFilterLibraryDatabase.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -199,7 +200,15 @@ public class MyTemplatesArea : BaseArea
 
     private void FilterTemplates()
     {
-        _filteredTemplates = _allTemplates.Where(template => FuzzyMatcher.FuzzyMatch(_searchText, template.Name)).ToList();
+        if (string.IsNullOrEmpty(_searchText))
+        {
+            _filteredTemplates = _allTemplates.ToList();
+        }
+        else
+        {
+            _filteredTemplates = _allTemplates.Where(template => FuzzyMatcher.FuzzyMatch(_searchText, template.Name))
+                .OrderByDescending(template => FuzzyMatcher.GetMatchScore(_searchText, template.Name)).ToList();
+        }
 
         ApplySort();
         _currentPage = 1;
@@ -260,11 +269,11 @@ public class MyTemplatesArea : BaseArea
 
     private string GetTemplateTypeDisplayName()
     {
-        return Plugin.Settings.SelectedTemplateType.Value switch
+        return Plugin.Settings.SelectedTemplateType switch
         {
             Routes.Types.ItemFilterLibrary => "Item Filter Library",
             Routes.Types.WheresMyCraftAt => "Where's My Craft At",
-            _ => Plugin.Settings.SelectedTemplateType.Value
+            _ => Plugin.Settings.SelectedTemplateType
         };
     }
 
@@ -283,7 +292,7 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<List<TemplateInfo>>>(Routes.Templates.MyTemplates(Plugin.Settings.SelectedTemplateType.Value));
+            var response = await ApiClient.GetAsync<ApiResponse<List<TemplateInfo>>>(Routes.Templates.MyTemplates(Plugin.Settings.SelectedTemplateType));
 
             _allTemplates = response.Data;
             FilterTemplates();
@@ -308,7 +317,7 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<TemplateInfo>>(Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType.Value, templateId, true));
+            var response = await ApiClient.GetAsync<ApiResponse<TemplateInfo>>(Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true));
 
             if (response?.Data?.Versions is {Count: > 0})
             {
@@ -333,7 +342,7 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            await ApiClient.DeleteAsync<ApiResponse<object>>(Routes.Templates.DeleteTemplate(Plugin.Settings.SelectedTemplateType.Value, templateId));
+            await ApiClient.DeleteAsync<ApiResponse<object>>(Routes.Templates.DeleteTemplate(Plugin.Settings.SelectedTemplateType, templateId));
 
             RefreshTemplates();
         }

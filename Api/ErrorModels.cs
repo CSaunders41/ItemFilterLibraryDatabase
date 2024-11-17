@@ -26,24 +26,24 @@ public class ApiError
 public static class ErrorCodes
 {
     // Authentication (401)
-    public const string AuthRequired = "AUTH_REQUIRED";
-    public const string AuthError = "AUTH_ERROR";
-    public const string AuthInvalidToken = "AUTH_INVALID_TOKEN";
+    public const string AUTH_REQUIRED = "AUTH_REQUIRED";
+    public const string AUTH_REFRESH_ERROR = "AUTH_REFRESH_ERROR";
+    public const string AUTH_INVALID_TOKEN = "AUTH_INVALID_TOKEN";
 
     // Authorization (403)
-    public const string AuthAdminOnly = "AUTH_ADMIN_ONLY";
-    public const string AuthForbidden = "AUTH_FORBIDDEN";
+    public const string AUTH_ADMIN_ONLY = "AUTH_ADMIN_ONLY";
+    public const string AUTH_FORBIDDEN = "AUTH_FORBIDDEN";
 
     // Validation (400)
-    public const string ValidationError = "VALIDATION_ERROR";
+    public const string VALIDATION_ERROR = "VALIDATION_ERROR";
 
     // Rate Limiting (429)
-    public const string RateLimitExceeded = "RATE_LIMIT_EXCEEDED";
+    public const string RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED";
 
     // Server (500)
-    public const string DatabaseError = "DATABASE_ERROR";
-    public const string InternalError = "INTERNAL_ERROR";
+    public const string DATABASE_ERROR = "DATABASE_ERROR";
+    public const string INTERNAL_ERROR = "INTERNAL_ERROR";
 
     // Not Found (404)
-    public const string RouteNotFound = "ROUTE_NOT_FOUND";
+    public const string ROUTE_NOT_FOUND = "ROUTE_NOT_FOUND";
 }

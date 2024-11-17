@@ -1,71 +1,143 @@
 ﻿using ExileCore;
+using ExileCore.Shared.Helpers;
 using ImGuiNET;
 using ItemFilterLibraryDatabase.Api;
 using ItemFilterLibraryDatabase.Areas;
+using SharpDX;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Numerics;
 using System.Threading.Tasks;
+using Vector2 = System.Numerics.Vector2;
+using Vector4 = System.Numerics.Vector4;
 
 namespace ItemFilterLibraryDatabase;
 
 public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDatabaseSettings>
 {
-    private const string API_URL = "https://itemfilterlib.squirrelguff.xyz";
+    private const string API_URL = "http://127.0.0.1:3000";
     private readonly List<IArea> _areas = [];
+    private readonly object _lockObject = new();
     private ApiClient _apiClient;
-    private bool _isAuthenticated;
-    private bool _isInitialized = false;
+    private TaskCompletionSource<bool> _initializationSource;
+    private Task<bool> _initTask;
+    private bool _isAuthenticating;
+    private bool _isInitialized;
     private string _newAuthToken = string.Empty;
     private int _previousAreaIndex = -1;
     private int _selectedAreaIndex;
     private string _statusMessage = string.Empty;
 
-    public bool IsLoading { get; set; }
+    public ItemFilterLibraryDatabase()
+    {
+        Name = "Item Filter Library Database";
+    }
 
+    public bool IsLoading { get; set; }
     public static ItemFilterLibraryDatabase Main { get; private set; }
 
     public override bool Initialise()
     {
         Main = this;
-        Name = "Item Filter Library Database";
-        _apiClient = new ApiClient(API_URL);
-
-        // Don't initialize areas yet - wait for auth check
-        _ = InitializePluginAsync();
-
-        return true;
-    }
-
-    private async Task InitializePluginAsync()
-    {
-        if (_isInitialized) return;
 
         try
         {
-            // Validate authentication first
-            await ValidateExistingAuthAsync();
+            DebugLog("Starting plugin initialization");
+            _apiClient = new ApiClient(API_URL);
+            _initializationSource = new TaskCompletionSource<bool>();
 
-            // Now initialize areas
-            _areas.Clear(); // Clear any existing areas
-            _areas.Add(new PublicTemplatesArea(this, _apiClient));
-            _areas.Add(new MyTemplatesArea(this, _apiClient));
+            // Start the initialization process asynchronously
+            // Explicitly specify the type for the task
+            _initTask = Task.Run(InitializePluginAsync);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogError($"Failed to initialize plugin: {ex}", 30f);
+            return false;
+        }
+    }
+
+    private async Task<bool> InitializePluginAsync()
+    {
+        if (_isInitialized)
+        {
+            DebugLog("Plugin already initialized");
+            return true;
+        }
+
+        try
+        {
+            DebugLog("Starting plugin initialization");
+            IsLoading = true;
+
+            // Initialize API client first
+            var initialized = await _apiClient.InitializeAsync();
+            if (!initialized)
+            {
+                DebugLog("API client initialization failed");
+                _statusMessage = "Please authenticate to use the plugin";
+                return false;
+            }
+
+            DebugLog("API client initialized successfully, setting up areas");
+            await InitializeAreas();
 
             _isInitialized = true;
+            _statusMessage = "Plugin initialized successfully";
+            _initializationSource.TrySetResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             LogError($"Failed to initialize plugin: {ex}", 30f);
             _statusMessage = "Failed to initialize plugin. Please try restarting.";
+            _initializationSource.TrySetException(ex);
+            return false;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private Task InitializeAreas()
+    {
+        try
+        {
+            DebugLog("Initializing plugin areas");
+            _areas.Clear();
+            _areas.Add(new PublicTemplatesArea(this, _apiClient));
+            _areas.Add(new MyTemplatesArea(this, _apiClient));
+
+            DebugLog("Areas initialized successfully");
+            return Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            LogError($"Failed to initialize areas: {ex}", 30f);
+            throw;
         }
     }
 
     public override void DrawSettings()
     {
+        base.DrawSettings();
         DrawAuthenticationSection();
-
         ImGui.Separator();
+
+        if (IsLoading)
+        {
+            ImGui.TextColored(new Vector4(1, 1, 0, 1), "Loading...");
+            return;
+        }
+
+        if (!_apiClient.IsInitialized)
+        {
+            ImGui.TextColored(new Vector4(1, 1, 0, 1), "Please authenticate to use the plugin");
+            return;
+        }
 
         if (!_isInitialized)
         {
@@ -73,24 +145,29 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
             return;
         }
 
-        if (_isAuthenticated)
-        {
-            DrawAreaTabs();
-        }
+        DrawTemplateTypeSelector();
+        ImGui.Separator();
+        DrawAreaTabs();
     }
 
-    private string GetTemplateTypeDisplayName(string type) => type switch
+    private void DrawTemplateTypeSelector()
     {
-        Routes.Types.ItemFilterLibrary => "Item Filter Library",
-        Routes.Types.WheresMyCraftAt => "Where's My Craft At",
-        _ => type
-    };
-
-    private void RefreshCurrentArea()
-    {
-        if (_selectedAreaIndex < _areas.Count)
+        var currentType = Settings.SelectedTemplateType;
+        if (ImGui.BeginCombo("Template Type", GetTemplateTypeDisplayName(currentType)))
         {
-            _areas[_selectedAreaIndex].RefreshData();
+            if (ImGui.Selectable(GetTemplateTypeDisplayName(Routes.Types.ItemFilterLibrary), currentType == Routes.Types.ItemFilterLibrary))
+            {
+                Settings.SelectedTemplateType = Routes.Types.ItemFilterLibrary;
+                RefreshCurrentArea();
+            }
+
+            if (ImGui.Selectable(GetTemplateTypeDisplayName(Routes.Types.WheresMyCraftAt), currentType == Routes.Types.WheresMyCraftAt))
+            {
+                Settings.SelectedTemplateType = Routes.Types.WheresMyCraftAt;
+                RefreshCurrentArea();
+            }
+
+            ImGui.EndCombo();
         }
     }
 
@@ -99,32 +176,47 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
         const float buttonWidth = 200f;
         const float inputWidth = 400f;
 
-        // Authentication Status with collapsible header
         var isAuthOpen = ImGui.CollapsingHeader("Authentication Status", ImGuiTreeNodeFlags.DefaultOpen);
+        if (!isAuthOpen) return;
 
-        if (isAuthOpen)
+        ImGui.Indent();
+
+        // Status Display
+        var statusColor = _apiClient.IsInitialized
+            ? new Vector4(0, 1, 0, 1)
+            : new Vector4(1, 0, 0, 1);
+
+        ImGui.TextColored(statusColor,
+            _apiClient.IsInitialized
+                ? "Authenticated"
+                : "Not Authenticated");
+
+        if (_apiClient.IsInitialized)
         {
-            ImGui.Indent();
-
-            // Status color indicator
-            var statusColor = _isAuthenticated
-                ? new Vector4(0, 1, 0, 1)
-                : new Vector4(1, 0, 0, 1);
-
-            ImGui.TextColored(statusColor,
-                _isAuthenticated
-                    ? "Authenticated"
-                    : "Not Authenticated");
-
-            if (_isAuthenticated)
+            ImGui.Text($"User ID: {Settings.UserId}");
+            ImGui.Text($"Admin: {Settings.IsAdmin}");
+            if (DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry) < DateTimeOffset.Now)
             {
-                ImGui.Text($"User ID: {Settings.UserId}");
-                ImGui.Text($"Admin: {Settings.IsAdmin}");
-                ImGui.Text($"Token Expires: {DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry).LocalDateTime}");
+                ImGui.TextColored(Color.Red.ToImguiVec4(), $"Auth Token Expired: {DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry).LocalDateTime}");
             }
+            else
+            {
+                ImGui.Text($"Auth Token Expires: {DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry).LocalDateTime}");
+            }
+            if (DateTimeOffset.FromUnixTimeSeconds(Settings.RefreshTokenExpiry) < DateTimeOffset.Now)
+            {
+                ImGui.TextColored(Color.Red.ToImguiVec4(), $"Refresh Token Expired: {DateTimeOffset.FromUnixTimeSeconds(Settings.RefreshTokenExpiry).LocalDateTime}");
+            }
+            else
+            {
+                ImGui.Text($"Refresh Token Expires: {DateTimeOffset.FromUnixTimeSeconds(Settings.RefreshTokenExpiry).LocalDateTime}");
+            }
+        }
 
-            // Authentication controls in a sub-section
-            if (ImGui.TreeNode("Authentication Controls"))
+        // Authentication Controls
+        if (ImGui.TreeNode("Authentication Controls"))
+        {
+            if (!_isAuthenticating)
             {
                 if (ImGui.Button("Open Login Page", new Vector2(buttonWidth, 24)))
                 {
@@ -143,92 +235,129 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
                 }
 
                 ImGui.PushItemWidth(inputWidth);
-                if (ImGui.InputText("New Auth Token", ref _newAuthToken, 2048))
-                {
-                    // Token input changed
-                }
-
+                ImGui.InputText("Auth Token", ref _newAuthToken, 2048);
                 ImGui.PopItemWidth();
 
-                if (ImGui.Button("Use New Auth Token", new Vector2(buttonWidth, 24)))
+                if (ImGui.Button("Use Auth Token", new Vector2(buttonWidth, 24)))
                 {
-                    _ = LoginWithNewTokenAsync();
+                    Task.Run(HandleAuthTokenSubmission);
                 }
-
-                ImGui.TreePop();
             }
-
-            // Display status message
-            if (!string.IsNullOrEmpty(_statusMessage))
+            else
             {
-                ImGui.TextColored(_statusMessage.StartsWith("Error:")
-                        ? new Vector4(1, 0, 0, 1)
-                        : new Vector4(0, 1, 0, 1),
-                    _statusMessage);
+                ImGui.TextColored(new Vector4(1, 1, 0, 1), "Authentication in progress...");
             }
 
-            ImGui.Unindent();
+            ImGui.TreePop();
         }
 
-        ImGui.Separator();
-
-        // Template Type Selector (outside the auth section)
-        var currentType = Settings.SelectedTemplateType.Value;
-        if (ImGui.BeginCombo("Template Type", GetTemplateTypeDisplayName(currentType)))
+        // Status Message
+        if (!string.IsNullOrEmpty(_statusMessage))
         {
-            if (ImGui.Selectable(GetTemplateTypeDisplayName(Routes.Types.ItemFilterLibrary), currentType == Routes.Types.ItemFilterLibrary))
-            {
-                Settings.SelectedTemplateType.Value = Routes.Types.ItemFilterLibrary;
-                RefreshCurrentArea();
-            }
+            var messageColor = _statusMessage.StartsWith("Error:", StringComparison.OrdinalIgnoreCase) || _statusMessage.StartsWith("Failed", StringComparison.OrdinalIgnoreCase) ||
+                               _statusMessage.StartsWith("Authentication failed:", StringComparison.OrdinalIgnoreCase)
+                ? new Vector4(1, 0, 0, 1)
+                : new Vector4(0, 1, 0, 1);
 
-            if (ImGui.Selectable(GetTemplateTypeDisplayName(Routes.Types.WheresMyCraftAt), currentType == Routes.Types.WheresMyCraftAt))
-            {
-                Settings.SelectedTemplateType.Value = Routes.Types.WheresMyCraftAt;
-                RefreshCurrentArea();
-            }
-
-            ImGui.EndCombo();
+            ImGui.TextColored(messageColor, _statusMessage);
         }
+
+        ImGui.Unindent();
     }
 
     private void DrawAreaTabs()
     {
-        if (ImGui.BeginTabBar("AreaTabs"))
+        if (!ImGui.BeginTabBar("AreaTabs")) return;
+
+        for (var i = 0; i < _areas.Count; i++)
         {
-            for (var i = 0; i < _areas.Count; i++)
+            var area = _areas[i];
+            if (!ImGui.BeginTabItem(area.Name)) continue;
+
+            if (_selectedAreaIndex != i)
             {
-                var area = _areas[i];
-                if (ImGui.BeginTabItem(area.Name))
-                {
-                    // Check if we switched tabs
-                    if (_selectedAreaIndex != i)
-                    {
-                        // Clear any open modals from the previous area
-                        if (_previousAreaIndex >= 0 && _previousAreaIndex < _areas.Count)
-                        {
-                            if (_areas[_previousAreaIndex] is MyTemplatesArea myTemplates)
-                            {
-                                myTemplates.CloseModals();
-                            }
-                            else if (_areas[_previousAreaIndex] is PublicTemplatesArea publicTemplates)
-                            {
-                                publicTemplates.CloseModals();
-                            }
-                        }
-
-                        _previousAreaIndex = _selectedAreaIndex;
-                        _selectedAreaIndex = i;
-                    }
-
-                    area.Draw();
-                    ImGui.EndTabItem();
-                }
+                HandleAreaChange(i);
             }
 
-            ImGui.EndTabBar();
+            area.Draw();
+            ImGui.EndTabItem();
+        }
+
+        ImGui.EndTabBar();
+    }
+
+    private async Task HandleAuthTokenSubmission()
+    {
+        if (_isAuthenticating) return;
+
+        try
+        {
+            lock (_lockObject)
+            {
+                if (_isAuthenticating) return;
+                _isAuthenticating = true;
+            }
+
+            _statusMessage = "Authenticating...";
+            IsLoading = true;
+
+            await _apiClient.LoginAsync(_newAuthToken);
+            _newAuthToken = string.Empty;
+            _statusMessage = "Authentication successful";
+
+            if (!_isInitialized)
+            {
+                await InitializePluginAsync();
+            }
+            else
+            {
+                RefreshCurrentArea();
+            }
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Authentication failed: {ex.Message}";
+            LogError($"Authentication failed: {ex}", 30f);
+        }
+        finally
+        {
+            _isAuthenticating = false;
+            IsLoading = false;
         }
     }
+
+    private void HandleAreaChange(int newIndex)
+    {
+        if (_previousAreaIndex >= 0 && _previousAreaIndex < _areas.Count)
+        {
+            if (_areas[_previousAreaIndex] is MyTemplatesArea myTemplates)
+            {
+                myTemplates.CloseModals();
+            }
+            else if (_areas[_previousAreaIndex] is PublicTemplatesArea publicTemplates)
+            {
+                publicTemplates.CloseModals();
+            }
+        }
+
+        _previousAreaIndex = _selectedAreaIndex;
+        _selectedAreaIndex = newIndex;
+    }
+
+    private void RefreshCurrentArea()
+    {
+        if (_selectedAreaIndex < _areas.Count)
+        {
+            _areas[_selectedAreaIndex].RefreshData();
+        }
+    }
+
+    private string GetTemplateTypeDisplayName(string type) => type switch
+    {
+        Routes.Types.ItemFilterLibrary => "Item Filter Library",
+        Routes.Types.WheresMyCraftAt => "Where's My Craft At",
+        _ => type
+    };
 
     public string UnixTimeToString(string unixTimeStr)
     {
@@ -247,109 +376,17 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
         }
     }
 
-    // Modified auth methods to update areas when needed
-    private async Task ValidateExistingAuthAsync()
+    private void DebugLog(string message)
     {
-        if (IsLoading) return;
-
-        try
+        if (Settings.Debug)
         {
-            IsLoading = true;
-
-            if (!Settings.HasValidAccessToken)
-            {
-                SetUnauthenticatedState("No valid token found");
-                return;
-            }
-
-            _statusMessage = "Validating stored credentials...";
-
-            var isValid = await _apiClient.ValidateTokenAsync();
-            if (!isValid)
-            {
-                SetUnauthenticatedState("Invalid or expired credentials");
-                return;
-            }
-
-            // Successfully validated
-            _isAuthenticated = true;
-            _statusMessage = "Successfully authenticated";
-
-            // Refresh the current area if authenticated
-            if (_selectedAreaIndex < _areas.Count)
-            {
-                _areas[_selectedAreaIndex].RefreshData(); // Now we can call this directly without casting
-            }
+            LogMessage($"[ItemFilterLibraryDatabase] {message}");
         }
-        catch (ApiAuthenticationException authEx)
-        {
-            HandleAuthenticationError(authEx);
-        }
-        catch (ApiException apiEx)
-        {
-            SetUnauthenticatedState($"API Error: {apiEx.Message}");
-        }
-        catch (Exception ex)
-        {
-            SetUnauthenticatedState($"Error: {ex.Message}");
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
-    private async Task LoginWithNewTokenAsync()
-    {
-        try
-        {
-            IsLoading = true;
-            _statusMessage = "Logging in with new token...";
-
-            await _apiClient.LoginAsync(_newAuthToken);
-            _isAuthenticated = true;
-            _newAuthToken = string.Empty; // Clear the input
-
-            // Refresh the current area after successful login
-            if (_selectedAreaIndex < _areas.Count)
-            {
-                (_areas[_selectedAreaIndex] as BaseArea)?.RefreshData();
-            }
-        }
-        catch (ApiAuthenticationException authEx)
-        {
-            HandleAuthenticationError(authEx);
-        }
-        catch (Exception ex)
-        {
-            SetUnauthenticatedState($"Error: {ex.Message}");
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
-    private void HandleAuthenticationError(ApiAuthenticationException authEx)
-    {
-        SetUnauthenticatedState(authEx.ErrorCode switch
-        {
-            ErrorCodes.AuthInvalidToken => "Stored token is no longer valid - please log in again",
-            ErrorCodes.AuthError when authEx.DetailedMessage?.Contains("Invalid or expired refresh token") == true => "Token has been invalidated by server - please log in again",
-            ErrorCodes.AuthRequired => "Authentication required - please log in again",
-            _ => $"Authentication failed: {authEx.Message}"
-        });
-    }
-
-    private void SetUnauthenticatedState(string message)
-    {
-        _isAuthenticated = false;
-        Settings.ClearTokens();
-        _statusMessage = message;
     }
 
     public override void Dispose()
     {
+        DebugLog("Disposing plugin");
         _apiClient?.Dispose();
         base.Dispose();
     }

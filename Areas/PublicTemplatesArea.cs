@@ -1,79 +1,13 @@
 ﻿using ImGuiNET;
 using ItemFilterLibraryDatabase.Api;
 using ItemFilterLibraryDatabase.UI;
+using ItemFilterLibraryDatabase.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
 namespace ItemFilterLibraryDatabase.Areas;
-
-public class FuzzyMatcher
-{
-    public static int LevenshteinDistance(string s1, string s2)
-    {
-        var costs = new int[s2.Length + 1];
-        for (var i = 0; i <= s1.Length; i++)
-        {
-            var lastValue = i;
-            for (var j = 0; j <= s2.Length; j++)
-            {
-                if (i == 0)
-                {
-                    costs[j] = j;
-                }
-                else if (j > 0)
-                {
-                    var newValue = costs[j - 1];
-                    if (s1[i - 1] != s2[j - 1])
-                    {
-                        newValue = Math.Min(Math.Min(newValue, lastValue), costs[j]) + 1;
-                    }
-
-                    costs[j - 1] = lastValue;
-                    lastValue = newValue;
-                }
-            }
-
-            if (i > 0) costs[s2.Length] = lastValue;
-        }
-
-        return costs[s2.Length];
-    }
-
-    public static bool FuzzyMatch(string pattern, string input, double threshold = 0.7)
-    {
-        if (string.IsNullOrEmpty(pattern)) return true;
-        if (string.IsNullOrEmpty(input)) return false;
-
-        pattern = pattern.ToLower();
-        input = input.ToLower();
-
-        // Direct substring match gets highest priority
-        if (input.Contains(pattern)) return true;
-
-        // Calculate Levenshtein distance
-        var distance = LevenshteinDistance(pattern, input);
-        var similarity = 1 - (double)distance / Math.Max(pattern.Length, input.Length);
-
-        return similarity >= threshold;
-    }
-}
-
-public class PaginationInfo
-{
-    public int Total { get; set; }
-    public int Page { get; set; }
-    public int PageSize { get; set; }
-    public int TotalPages { get; set; }
-    public bool HasMore { get; set; }
-}
-
-public class PaginatedResponse<T>
-{
-    public List<T> Data { get; set; }
-    public PaginationInfo Pagination { get; set; }
-}
 
 public class PublicTemplatesArea : BaseArea
 {
@@ -97,13 +31,22 @@ public class PublicTemplatesArea : BaseArea
     public PublicTemplatesArea(ItemFilterLibraryDatabase plugin, ApiClient apiClient) : base(plugin, apiClient)
     {
         _templateModal = new TemplateModal(plugin, apiClient);
-        StartBackgroundLoad();
+        if (Plugin.Initialized && ApiClient.IsInitialized)
+        {
+            StartBackgroundLoad();
+        }
     }
 
     public override string Name => "Public Templates";
 
     public override void Draw()
     {
+        if (!ApiClient.IsInitialized)
+        {
+            ImGui.TextColored(new Vector4(1, 1, 0, 1), "Please authenticate to view public templates");
+            return;
+        }
+
         // Top controls section
         ImGui.PushItemWidth(300);
         if (ImGui.InputText("Search Templates", ref _searchText, 100))
@@ -171,7 +114,7 @@ public class PublicTemplatesArea : BaseArea
         {
             DrawTemplatesTable();
         }
-        else if (!_initialLoadComplete)
+        else if (!_initialLoadComplete || _isLoadingBackground)
         {
             ImGui.Text("Loading templates...");
         }
@@ -255,7 +198,15 @@ public class PublicTemplatesArea : BaseArea
 
     private void FilterTemplates()
     {
-        _filteredTemplates = _allTemplates.Where(template => FuzzyMatcher.FuzzyMatch(_searchText, template.Name)).ToList();
+        if (string.IsNullOrEmpty(_searchText))
+        {
+            _filteredTemplates = _allTemplates.ToList();
+        }
+        else
+        {
+            _filteredTemplates = _allTemplates.Where(template => FuzzyMatcher.FuzzyMatch(_searchText, template.Name))
+                .OrderByDescending(template => FuzzyMatcher.GetMatchScore(_searchText, template.Name)).ToList();
+        }
 
         ApplySort();
         _currentPage = 1;
@@ -271,8 +222,8 @@ public class PublicTemplatesArea : BaseArea
                 ? query.OrderBy(t => t.Name)
                 : query.OrderByDescending(t => t.Name),
             SortColumn.Author => _sortState.Ascending
-                ? query.OrderBy(t => t.DiscordId)
-                : query.OrderByDescending(t => t.DiscordId),
+                ? query.OrderBy(t => t.CreatorName)
+                : query.OrderByDescending(t => t.CreatorName),
             SortColumn.Updated => _sortState.Ascending
                 ? query.OrderBy(t => long.Parse(t.UpdatedAt))
                 : query.OrderByDescending(t => long.Parse(t.UpdatedAt)),
@@ -314,6 +265,24 @@ public class PublicTemplatesArea : BaseArea
         };
     }
 
+    private string GetTemplateTypeDisplayName()
+    {
+        return Plugin.Settings.SelectedTemplateType switch
+        {
+            Routes.Types.ItemFilterLibrary => "Item Filter Library",
+            Routes.Types.WheresMyCraftAt => "Where's My Craft At",
+            _ => Plugin.Settings.SelectedTemplateType
+        };
+    }
+
+    public override void RefreshData()
+    {
+        if (ApiClient.IsInitialized)
+        {
+            StartBackgroundLoad();
+        }
+    }
+
     private async void StartBackgroundLoad()
     {
         if (_isLoadingBackground) return;
@@ -331,7 +300,7 @@ public class PublicTemplatesArea : BaseArea
 
             do
             {
-                var response = await ApiClient.GetAsync<PaginatedResponse<TemplateInfo>>(Routes.Templates.PublicTemplates(Plugin.Settings.SelectedTemplateType.Value, currentPage, PageSize));
+                var response = await ApiClient.GetAsync<PaginatedResponse<TemplateInfo>>(Routes.Templates.PublicTemplates(Plugin.Settings.SelectedTemplateType, currentPage, PageSize));
 
                 if (response?.Data == null || response.Pagination == null)
                 {
@@ -346,12 +315,14 @@ public class PublicTemplatesArea : BaseArea
                 if (currentPage == 1)
                 {
                     _initialLoadComplete = true;
+                    FilterTemplates(); // Update results as new data comes in
                 }
-
-                FilterTemplates(); // Update results as new data comes in
 
                 hasMore = response.Pagination.HasMore;
                 currentPage++;
+
+                // Update filtered templates after each page load
+                FilterTemplates();
             } while (hasMore);
         }
         catch (ApiException ex)
@@ -373,7 +344,7 @@ public class PublicTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<TemplateInfo>>(Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType.Value, templateId, true));
+            var response = await ApiClient.GetAsync<ApiResponse<TemplateInfo>>(Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true));
 
             if (response?.Data?.Versions is {Count: > 0})
             {
@@ -391,19 +362,9 @@ public class PublicTemplatesArea : BaseArea
         }
     }
 
-    private string GetTemplateTypeDisplayName()
+    public override void CloseModals()
     {
-        return Plugin.Settings.SelectedTemplateType.Value switch
-        {
-            Routes.Types.ItemFilterLibrary => "Item Filter Library",
-            Routes.Types.WheresMyCraftAt => "Where's My Craft At",
-            _ => Plugin.Settings.SelectedTemplateType.Value
-        };
-    }
-
-    public override void RefreshData()
-    {
-        StartBackgroundLoad();
+        _templateModal?.Close();
     }
 
     private enum SortColumn

@@ -176,7 +176,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
             plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await apiClient.GetAsync<ApiResponse<TemplateInfo>>(Routes.Templates.GetTemplate(plugin.Settings.SelectedTemplateType.Value,
+            var response = await apiClient.GetAsync<ApiResponse<TemplateInfo>>(Routes.Templates.GetTemplate(plugin.Settings.SelectedTemplateType,
                 _template.TemplateId,
                 true // Always include versions
             ));
@@ -227,7 +227,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
                     IsPublic = _isPublic
                 };
 
-                await apiClient.PostAsync<ApiResponse<object>>(Routes.Templates.CreateTemplate(plugin.Settings.SelectedTemplateType.Value), createRequest);
+                await apiClient.PostAsync<ApiResponse<object>>(Routes.Templates.CreateTemplate(plugin.Settings.SelectedTemplateType), createRequest);
             }
             else
             {
@@ -241,7 +241,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
                         : _changeNotes
                 };
 
-                await apiClient.PutAsync<ApiResponse<object>>(Routes.Templates.UpdateTemplate(plugin.Settings.SelectedTemplateType.Value, _template.TemplateId), updateRequest);
+                await apiClient.PutAsync<ApiResponse<object>>(Routes.Templates.UpdateTemplate(plugin.Settings.SelectedTemplateType, _template.TemplateId), updateRequest);
             }
 
             _isOpen = false;
