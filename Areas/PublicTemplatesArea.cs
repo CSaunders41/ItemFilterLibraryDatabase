@@ -12,28 +12,25 @@ namespace ItemFilterLibraryDatabase.Areas;
 public class PublicTemplatesArea : BaseArea
 {
     private const float SearchDelayDuration = 0.5f;
-    private const int ItemsPerPage = 20;
-    private const int PageSize = 100;
+    private const int ItemsPerPage = 40;
     private readonly List<TemplateInfo> _allTemplates = [];
-    private readonly SortState _sortState = new() {Column = SortColumn.Updated, Ascending = false};
-
+    private readonly SortState _sortState = new() { Column = SortColumn.Updated, Ascending = false };
     private readonly TemplateModal _templateModal;
     private int _currentPage = 1;
     private string _errorMessage = string.Empty;
     private List<TemplateInfo> _filteredTemplates = [];
     private bool _initialLoadComplete = false;
     private bool _isLoadingBackground = false;
-    private int _loadedPages = 0;
+    private int _totalPages = 1;
     private float _searchDelay = 0;
     private string _searchText = string.Empty;
-    private int _totalPages = 1;
 
     public PublicTemplatesArea(ItemFilterLibraryDatabase plugin, ApiClient apiClient) : base(plugin, apiClient)
     {
         _templateModal = new TemplateModal(plugin, apiClient);
         if (Plugin.Initialized && ApiClient.IsInitialized)
         {
-            StartBackgroundLoad();
+            LoadTemplates();
         }
     }
 
@@ -47,7 +44,6 @@ public class PublicTemplatesArea : BaseArea
             return;
         }
 
-        // Top controls section
         ImGui.PushItemWidth(300);
         if (ImGui.InputText("Search Templates", ref _searchText, 100))
         {
@@ -59,19 +55,17 @@ public class PublicTemplatesArea : BaseArea
         ImGui.SameLine();
         if (ImGui.Button("Refresh") && !_isLoadingBackground)
         {
-            StartBackgroundLoad();
+            LoadTemplates();
         }
 
-        // Show loading progress
         if (_isLoadingBackground)
         {
             ImGui.SameLine();
-            ImGui.Text($"Loading... ({_loadedPages}/{_totalPages} pages)");
+            ImGui.Text($"Loading... ({_currentPage}/{_totalPages} pages)");
         }
 
         ShowError(_errorMessage);
 
-        // Pagination controls
         if (_filteredTemplates.Count > 0)
         {
             var totalPages = (_filteredTemplates.Count + ItemsPerPage - 1) / ItemsPerPage;
@@ -99,7 +93,6 @@ public class PublicTemplatesArea : BaseArea
             ImGui.Separator();
         }
 
-        // Handle search delay
         if (_searchDelay > 0)
         {
             _searchDelay -= ImGui.GetIO().DeltaTime;
@@ -109,7 +102,6 @@ public class PublicTemplatesArea : BaseArea
             }
         }
 
-        // Table section
         if (_filteredTemplates.Count > 0)
         {
             DrawTemplatesTable();
@@ -136,7 +128,6 @@ public class PublicTemplatesArea : BaseArea
 
         if (ImGui.BeginTable("public_templates", 6, flags))
         {
-            // Setup columns
             ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Author", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 130);
             ImGui.TableSetupColumn("Public", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
@@ -145,7 +136,6 @@ public class PublicTemplatesArea : BaseArea
             ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed, 240);
             ImGui.TableHeadersRow();
 
-            // Handle sorting
             var sortSpecs = ImGui.TableGetSortSpecs();
             if (sortSpecs.SpecsDirty)
             {
@@ -170,9 +160,7 @@ public class PublicTemplatesArea : BaseArea
                 ImGui.Text(template.CreatorName);
 
                 ImGui.TableNextColumn();
-                ImGui.Text(template.IsPublic
-                    ? "Yes"
-                    : "No");
+                ImGui.Text(template.IsPublic ? "Yes" : "No");
 
                 ImGui.TableNextColumn();
                 ImGui.Text(FormatTimeAgo(template.UpdatedAt));
@@ -231,8 +219,8 @@ public class PublicTemplatesArea : BaseArea
                 ? query.OrderBy(t => t.CreatorName)
                 : query.OrderByDescending(t => t.CreatorName),
             SortColumn.Updated => _sortState.Ascending
-                ? query.OrderBy(t => long.Parse(t.UpdatedAt))
-                : query.OrderByDescending(t => long.Parse(t.UpdatedAt)),
+                ? query.OrderBy(t => t.UpdatedAt)
+                : query.OrderByDescending(t => t.UpdatedAt),
             SortColumn.Version => _sortState.Ascending
                 ? query.OrderBy(t => t.Version)
                 : query.OrderByDescending(t => t.Version),
@@ -285,11 +273,11 @@ public class PublicTemplatesArea : BaseArea
     {
         if (ApiClient.IsInitialized)
         {
-            StartBackgroundLoad();
+            LoadTemplates();
         }
     }
 
-    private async void StartBackgroundLoad()
+    private async void LoadTemplates(bool resetCache = true)
     {
         if (_isLoadingBackground) return;
 
@@ -297,45 +285,37 @@ public class PublicTemplatesArea : BaseArea
         {
             _isLoadingBackground = true;
             _errorMessage = string.Empty;
-            _allTemplates.Clear();
-            _loadedPages = 0;
-            _initialLoadComplete = false;
 
-            var currentPage = 1;
-            bool hasMore;
-
-            do
+            if (resetCache)
             {
-                var response = await ApiClient.GetAsync<PaginatedResponse<TemplateInfo>>(Routes.Templates.PublicTemplates(Plugin.Settings.SelectedTemplateType, currentPage, PageSize));
+                _allTemplates.Clear();
+                _currentPage = 1;
+            }
 
-                if (response?.Data == null || response.Pagination == null)
-                {
-                    break;
-                }
+            var response = await ApiClient.GetAsync<ApiResponse<TemplateListResponse>>(
+                Routes.Templates.GetAllTemplates(
+                    Plugin.Settings.SelectedTemplateType,
+                    _currentPage,
+                    ItemsPerPage
+                )
+            );
 
-                _allTemplates.AddRange(response.Data);
-                _loadedPages = currentPage;
-                _totalPages = response.Pagination.TotalPages;
-
-                // Set initial load complete after first page
-                if (currentPage == 1)
-                {
-                    _initialLoadComplete = true;
-                    FilterTemplates(); // Update results as new data comes in
-                }
-
-                hasMore = response.Pagination.HasMore;
-                currentPage++;
-
-                // Update filtered templates after each page load
+            if (response?.Data?.Templates != null)
+            {
+                _allTemplates.AddRange(response.Data.Templates);
+                _totalPages = response.Data.TotalPages;
+                _initialLoadComplete = true;
                 FilterTemplates();
-            } while (hasMore);
+            }
         }
         catch (ApiException ex)
         {
             _errorMessage = $"Error: {ex.Message}";
-            _allTemplates.Clear();
-            _filteredTemplates.Clear();
+            if (resetCache)
+            {
+                _allTemplates.Clear();
+                _filteredTemplates.Clear();
+            }
         }
         finally
         {
@@ -350,12 +330,13 @@ public class PublicTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<TemplateInfo>>(Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true));
+            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailInfo>>(
+                Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true)
+            );
 
-            if (response?.Data?.Versions is {Count: > 0})
+            if (response?.Data?.LatestVersion?.Content != null)
             {
-                var latestVersion = response.Data.Versions[0];
-                ImGui.SetClipboardText(latestVersion.Content);
+                ImGui.SetClipboardText(response.Data.LatestVersion.Content.ToString());
             }
         }
         catch (ApiException ex)

@@ -13,7 +13,7 @@ public class MyTemplatesArea : BaseArea
 {
     private const int ItemsPerPage = 20;
     private const float SearchDelayDuration = 0.5f;
-    private readonly SortState _sortState = new() {Column = SortColumn.Updated, Ascending = false};
+    private readonly SortState _sortState = new() { Column = SortColumn.Updated, Ascending = false };
     private readonly TemplateModal _templateModal;
     private List<TemplateInfo> _allTemplates = [];
     private int _currentPage = 1;
@@ -138,7 +138,6 @@ public class MyTemplatesArea : BaseArea
             ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed, 240);
             ImGui.TableHeadersRow();
 
-            // Handle sorting
             var sortSpecs = ImGui.TableGetSortSpecs();
             if (sortSpecs.SpecsDirty)
             {
@@ -161,7 +160,6 @@ public class MyTemplatesArea : BaseArea
                 ImGui.Text(template.Name);
 
                 ImGui.TableNextColumn();
-
                 if (ImGui.Button(template.IsPublic ? "Public" : "Private", new Vector2(-1, 0)))
                 {
                     ToggleTemplateVisibility(template.TemplateId, !template.IsPublic);
@@ -200,31 +198,6 @@ public class MyTemplatesArea : BaseArea
         }
     }
 
-    private async void ToggleTemplateVisibility(string templateId, bool isPublic)
-    {
-        try
-        {
-            Plugin.IsLoading = true;
-            _errorMessage = string.Empty;
-
-            await ApiClient.PatchAsync<ApiResponse<object>>(
-                Routes.Templates.ToggleVisibility(Plugin.Settings.SelectedTemplateType, templateId),
-                new { is_public = isPublic }
-            );
-
-            // Refresh the templates to show the updated state
-            RefreshTemplates();
-        }
-        catch (ApiException ex)
-        {
-            _errorMessage = $"Error: Failed to update template visibility - {ex.Message}";
-        }
-        finally
-        {
-            Plugin.IsLoading = false;
-        }
-    }
-
     private void FilterTemplates()
     {
         if (string.IsNullOrEmpty(_searchText))
@@ -254,8 +227,8 @@ public class MyTemplatesArea : BaseArea
                 ? query.OrderBy(t => t.Version)
                 : query.OrderByDescending(t => t.Version),
             SortColumn.Updated => _sortState.Ascending
-                ? query.OrderBy(t => long.Parse(t.UpdatedAt))
-                : query.OrderByDescending(t => long.Parse(t.UpdatedAt)),
+                ? query.OrderBy(t => t.UpdatedAt)
+                : query.OrderByDescending(t => t.UpdatedAt),
             SortColumn.Public => _sortState.Ascending
                 ? query.OrderBy(t => t.IsPublic)
                 : query.OrderByDescending(t => t.IsPublic),
@@ -319,9 +292,11 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<List<TemplateInfo>>>(Routes.Templates.MyTemplates(Plugin.Settings.SelectedTemplateType));
+            var response = await ApiClient.GetAsync<ApiResponse<List<TemplateInfo>>>(
+                Routes.Templates.GetMyTemplates(Plugin.Settings.SelectedTemplateType)
+            );
 
-            _allTemplates = response.Data;
+            _allTemplates = response.Data ?? [];
             FilterTemplates();
         }
         catch (ApiException ex)
@@ -344,17 +319,42 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<TemplateInfo>>(Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true));
+            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailInfo>>(
+                Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true)
+            );
 
-            if (response?.Data?.Versions is {Count: > 0})
+            if (response?.Data?.LatestVersion?.Content != null)
             {
-                var latestVersion = response.Data.Versions[0];
-                ImGui.SetClipboardText(latestVersion.Content);
+                ImGui.SetClipboardText(response.Data.LatestVersion.Content.ToString());
             }
         }
         catch (ApiException ex)
         {
             _errorMessage = $"Error: Failed to copy template - {ex.Message}";
+        }
+        finally
+        {
+            Plugin.IsLoading = false;
+        }
+    }
+
+    private async void ToggleTemplateVisibility(string templateId, bool isPublic)
+    {
+        try
+        {
+            Plugin.IsLoading = true;
+            _errorMessage = string.Empty;
+
+            await ApiClient.PatchAsync<ApiResponse<object>>(
+                Routes.Templates.ToggleVisibility(Plugin.Settings.SelectedTemplateType, templateId),
+                new { is_public = isPublic }
+            );
+
+            RefreshTemplates();
+        }
+        catch (ApiException ex)
+        {
+            _errorMessage = $"Error: Failed to update template visibility - {ex.Message}";
         }
         finally
         {
@@ -369,7 +369,9 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            await ApiClient.DeleteAsync<ApiResponse<object>>(Routes.Templates.DeleteTemplate(Plugin.Settings.SelectedTemplateType, templateId));
+            await ApiClient.DeleteAsync<ApiResponse<object>>(
+                Routes.Templates.DeleteTemplate(Plugin.Settings.SelectedTemplateType, templateId)
+            );
 
             RefreshTemplates();
         }

@@ -14,9 +14,10 @@ public enum TemplateModalMode
     Create
 }
 
-public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient)
+public class TemplateModal
 {
-    private string _changeNotes = string.Empty;
+    private readonly ApiClient _apiClient;
+    private readonly ItemFilterLibraryDatabase _plugin;
     private string _content = string.Empty;
     private string _errorMessage = string.Empty;
     private bool _isOpen;
@@ -27,6 +28,12 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
     private TemplateInfo _template;
     private List<TemplateVersion> _versions = [];
 
+    public TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient)
+    {
+        _plugin = plugin;
+        _apiClient = apiClient;
+    }
+
     public void Show(TemplateInfo template, TemplateModalMode mode)
     {
         try
@@ -35,7 +42,6 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
             _mode = mode;
             _isOpen = true;
             _errorMessage = string.Empty;
-            _changeNotes = string.Empty;
             _versions.Clear();
             _selectedVersionIndex = 0;
 
@@ -43,7 +49,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
             {
                 _name = string.Empty;
                 _content = string.Empty;
-                _isPublic = true;
+                _isPublic = false;
             }
             else
             {
@@ -54,7 +60,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
         }
         catch (Exception ex)
         {
-            plugin.LogError($"Error in Show: {ex}", 30);
+            _plugin.LogError($"Error in Show: {ex}", 30);
         }
     }
 
@@ -85,7 +91,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
         }
         catch (Exception ex)
         {
-            plugin.LogError($"Error in Draw: {ex}", 30);
+            _plugin.LogError($"Error in Draw: {ex}", 30);
             _isOpen = false;
         }
     }
@@ -101,29 +107,22 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
         if (_mode != TemplateModalMode.View)
         {
             ImGui.InputText("Name", ref _name, 100);
-
-            if (_mode == TemplateModalMode.Edit)
-            {
-                ImGui.InputText("Change Notes", ref _changeNotes, 200);
-            }
         }
         else
         {
             ImGui.Text($"Name: {_name}");
             ImGui.Text($"Author: {_template.CreatorName}");
             ImGui.Text($"Version: {_template.Version}");
-            ImGui.Text($"Last Updated: {plugin.UnixTimeToString(_template.UpdatedAt)}");
+            ImGui.Text($"Last Updated: {_plugin.UnixTimeToString(_template.UpdatedAt)}");
         }
 
-        // Show versions for both View and Edit modes
         if (_versions.Count > 0)
         {
-            var items = _versions.Select(v =>
-                $"Version {v.VersionNumber}: {(string.IsNullOrEmpty(v.ChangeNotes) ? "No change notes" : v.ChangeNotes)} ({plugin.UnixTimeToString(v.CreatedAt.ToString())})").ToArray();
+            var items = _versions.Select(v => $"Version {v.VersionNumber} ({_plugin.UnixTimeToString(v.CreatedAt.ToString())})").ToArray();
 
             if (ImGui.Combo("Version History", ref _selectedVersionIndex, items, items.Length))
             {
-                _content = _versions[_selectedVersionIndex].Content;
+                _content = _versions[_selectedVersionIndex].Content.ToString();
             }
         }
 
@@ -172,21 +171,17 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
     {
         try
         {
-            plugin.IsLoading = true;
+            _plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await apiClient.GetAsync<ApiResponse<TemplateInfo>>(Routes.Templates.GetTemplate(plugin.Settings.SelectedTemplateType,
-                _template.TemplateId,
-                true // Always include versions
-            ));
+            var response = await _apiClient.GetAsync<ApiResponse<TemplateDetailInfo>>(Routes.Templates.GetTemplate(_plugin.Settings.SelectedTemplateType, _template.TemplateId, true));
 
             if (response?.Data != null)
             {
                 _versions = response.Data.Versions ?? [];
                 if (_versions.Count > 0)
                 {
-                    var latestVersion = _versions.OrderByDescending(v => v.VersionNumber).First();
-                    _content = latestVersion.Content;
+                    _content = _versions[0].Content.ToString();
                     _selectedVersionIndex = 0;
                 }
 
@@ -198,15 +193,9 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
             _errorMessage = $"Error: Failed to load template - {ex.Message}";
             _content = string.Empty;
         }
-        catch (Exception ex)
-        {
-            plugin.LogError($"Error in LoadTemplateContent: {ex}", 30);
-            _errorMessage = "An unexpected error occurred while loading the template";
-            _content = string.Empty;
-        }
         finally
         {
-            plugin.IsLoading = false;
+            _plugin.IsLoading = false;
         }
     }
 
@@ -214,7 +203,7 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
     {
         try
         {
-            plugin.IsLoading = true;
+            _plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
             if (_mode == TemplateModalMode.Create)
@@ -222,23 +211,20 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
                 var createRequest = new Routes.Templates.RequestBodies.CreateTemplateRequest
                 {
                     Name = _name,
-                    Content = _content,
+                    Content = _content
                 };
 
-                await apiClient.PostAsync<ApiResponse<object>>(Routes.Templates.CreateTemplate(plugin.Settings.SelectedTemplateType), createRequest);
+                await _apiClient.PostAsync<ApiResponse<TemplateDetailInfo>>(Routes.Templates.CreateTemplate(_plugin.Settings.SelectedTemplateType), createRequest);
             }
             else
             {
                 var updateRequest = new Routes.Templates.RequestBodies.UpdateTemplateRequest
                 {
                     Name = _name,
-                    Content = _content,
-                    ChangeNotes = string.IsNullOrEmpty(_changeNotes)
-                        ? "Updated via plugin"
-                        : _changeNotes
+                    Content = _content
                 };
 
-                await apiClient.PutAsync<ApiResponse<object>>(Routes.Templates.UpdateTemplate(plugin.Settings.SelectedTemplateType, _template.TemplateId), updateRequest);
+                await _apiClient.PutAsync<ApiResponse<TemplateDetailInfo>>(Routes.Templates.UpdateTemplate(_plugin.Settings.SelectedTemplateType, _template.TemplateId), updateRequest);
             }
 
             _isOpen = false;
@@ -247,14 +233,9 @@ public class TemplateModal(ItemFilterLibraryDatabase plugin, ApiClient apiClient
         {
             _errorMessage = $"Error: Failed to save template - {ex.Message}";
         }
-        catch (Exception ex)
-        {
-            plugin.LogError($"Error in SaveTemplate: {ex}", 30);
-            _errorMessage = "An unexpected error occurred while saving the template";
-        }
         finally
         {
-            plugin.IsLoading = false;
+            _plugin.IsLoading = false;
         }
     }
 
