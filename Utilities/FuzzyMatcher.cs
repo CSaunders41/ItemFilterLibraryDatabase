@@ -104,8 +104,6 @@ public static class FuzzyMatcher
 
         var patternWords = pattern.Split(new[] {' '}, StringSplitOptions.RemoveEmptyEntries);
         var inputWords = input.Split(new[] {' '}, StringSplitOptions.RemoveEmptyEntries);
-
-        var totalScore = 0;
         var wordScores = new int[patternWords.Length];
 
         for (var i = 0; i < patternWords.Length; i++)
@@ -146,9 +144,6 @@ public static class FuzzyMatcher
             wordScores[i] = bestWordScore;
         }
 
-        // Average score across all pattern words
-        totalScore = (int)wordScores.Average();
-
-        return totalScore;
+        return (int)wordScores.Average();
     }
 }

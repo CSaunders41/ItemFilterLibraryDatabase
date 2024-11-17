@@ -1,6 +1,4 @@
-﻿using System.Text.Json.Serialization;
-
-namespace ItemFilterLibraryDatabase.Api;
+﻿namespace ItemFilterLibraryDatabase.Api;
 
 public static class Routes
 {
@@ -10,39 +8,11 @@ public static class Routes
 
         public static string DiscordLogin => $"{Base}/discord/login";
         public static string Refresh => $"{Base}/refresh";
-        public static string Test => $"{Base}/test";
 
-        public static class RequestBodies
+        public static class Requests
         {
-            public class RefreshTokenRequest
-            {
-                [JsonPropertyName("refresh_token")]
-                public string RefreshToken { get; set; }
-            }
-        }
-
-        public static class ResponseBodies
-        {
-            public class TestAuthResponse
-            {
-                [JsonPropertyName("status")]
-                public string Status { get; set; }
-
-                [JsonPropertyName("user")]
-                public UserInfo User { get; set; }
-
-                [JsonPropertyName("token_expiry")]
-                public long TokenExpiry { get; set; }
-
-                public class UserInfo
-                {
-                    [JsonPropertyName("id")]
-                    public string Id { get; set; }
-
-                    [JsonPropertyName("is_admin")]
-                    public bool IsAdmin { get; set; }
-                }
-            }
+            public static object CreateRefreshRequest(string refreshToken) =>
+                new { refresh_token = refreshToken };
         }
     }
 
@@ -81,44 +51,17 @@ public static class Routes
         {
             public class CreateTemplateRequest
             {
-                [JsonPropertyName("name")]
                 public string Name { get; set; }
-
-                [JsonPropertyName("content")]
                 public object Content { get; set; }
-
-                [JsonPropertyName("is_public")]
                 public bool IsPublic { get; set; }
             }
 
             public class UpdateTemplateRequest
             {
-                [JsonPropertyName("name")]
                 public string Name { get; set; }
-
-                [JsonPropertyName("content")]
                 public object Content { get; set; }
-
-                [JsonPropertyName("change_notes")]
                 public string ChangeNotes { get; set; }
-
-                [JsonPropertyName("is_public")]
                 public bool? IsPublic { get; set; }
-            }
-        }
-
-        public static class ResponseBodies
-        {
-            public class TemplateTypeResponse
-            {
-                [JsonPropertyName("id")]
-                public string Id { get; set; }
-
-                [JsonPropertyName("name")]
-                public string Name { get; set; }
-
-                [JsonPropertyName("description")]
-                public string Description { get; set; }
             }
         }
     }
@@ -137,32 +80,7 @@ public static class Routes
         {
             public class UpdateAdminRequest
             {
-                [JsonPropertyName("is_admin")]
                 public bool IsAdmin { get; set; }
-            }
-        }
-
-        public static class ResponseBodies
-        {
-            public class UserDetailsResponse
-            {
-                [JsonPropertyName("id")]
-                public string Id { get; set; }
-
-                [JsonPropertyName("discord_id")]
-                public string DiscordId { get; set; }
-
-                [JsonPropertyName("username")]
-                public string Username { get; set; }
-
-                [JsonPropertyName("is_admin")]
-                public bool IsAdmin { get; set; }
-
-                [JsonPropertyName("created_at")]
-                public long CreatedAt { get; set; }
-
-                [JsonPropertyName("last_login")]
-                public long? LastLogin { get; set; }
             }
         }
     }

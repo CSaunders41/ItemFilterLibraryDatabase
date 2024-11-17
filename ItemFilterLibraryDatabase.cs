@@ -15,7 +15,7 @@ namespace ItemFilterLibraryDatabase;
 
 public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDatabaseSettings>
 {
-    private const string API_URL = "http://127.0.0.1:3000";
+    private const string API_URL = "https://itemfilterlib.squirrelguff.xyz";
     private readonly List<IArea> _areas = [];
     private readonly object _lockObject = new();
     private ApiClient _apiClient;
