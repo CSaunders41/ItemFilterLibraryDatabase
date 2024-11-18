@@ -29,7 +29,7 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
 
     public ItemFilterLibraryDatabase()
     {
-        Name = "Item Filter Library Database";
+        Name = "Filter Database";
     }
 
     public bool IsLoading { get; set; }
