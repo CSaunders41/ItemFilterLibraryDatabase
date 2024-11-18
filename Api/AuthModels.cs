@@ -44,11 +44,5 @@ public class AuthData
     {
         [JsonPropertyName("id")]
         public string Id { get; set; }
-
-        [JsonPropertyName("is_admin")]
-        public bool IsAdmin { get; set; }
-
-        [JsonPropertyName("last_login")]
-        public long? LastLogin { get; set; }
     }
 }

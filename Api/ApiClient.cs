@@ -181,6 +181,7 @@ public class ApiClient : IDisposable
             if (response.Data.User != null)
             {
                 ItemFilterLibraryDatabase.Main.Settings.UserId = response.Data.User.Id;
+                ItemFilterLibraryDatabase.Main.Settings.IsAdmin = response.Data.User.IsAdmin;
                 DebugLog($"Updated user info - ID: {response.Data.User.Id}");
             }
 
@@ -465,8 +466,7 @@ public class ApiClient : IDisposable
         ItemFilterLibraryDatabase.Main.Settings.UserId = authData.User?.Id ?? string.Empty;
         DebugLog($"User ID: {ItemFilterLibraryDatabase.Main.Settings.UserId}");
 
-        ItemFilterLibraryDatabase.Main.Settings.IsAdmin = authData.User?.IsAdmin ?? false;
-        DebugLog($"Is Admin: {ItemFilterLibraryDatabase.Main.Settings.IsAdmin}");
+        ItemFilterLibraryDatabase.Main.Settings.IsAdmin = false;
 
         DebugLog("Auth data storage completed");
     }

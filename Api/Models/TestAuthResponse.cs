@@ -29,4 +29,8 @@ public class TestAuthUserInfo
     [JsonPropertyName("id")]
     // ReSharper disable once UnusedAutoPropertyAccessor.Local
     public string Id { get; set; } // Added setter
+
+    [JsonPropertyName("isAdmin")]
+    // ReSharper disable once UnusedAutoPropertyAccessor.Local
+    public bool IsAdmin { get; set; } // Added setter
 }
