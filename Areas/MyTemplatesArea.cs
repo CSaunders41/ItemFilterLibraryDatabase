@@ -120,7 +120,7 @@ public class MyTemplatesArea : BaseArea
         }
         else
         {
-            ImGui.Text($"No templates found for {GetTemplateTypeDisplayName()}");
+            ImGui.Text($"No templates found for {ItemFilterLibraryDatabase.Main.GetTemplateTypeDisplayName(ItemFilterLibraryDatabase.Main.Settings.SelectedTemplateType)}");
         }
 
         _templateModal.Draw();
@@ -274,6 +274,7 @@ public class MyTemplatesArea : BaseArea
         {
             Routes.Types.ItemFilterLibrary => "Item Filter Library",
             Routes.Types.WheresMyCraftAt => "Where's My Craft At",
+            Routes.Types.ReAgent => "ReAgent",
             _ => Plugin.Settings.SelectedTemplateType
         };
     }

@@ -147,5 +147,6 @@ public static class Routes
     {
         public const string WheresMyCraftAt = "wheresmycraftat";
         public const string ItemFilterLibrary = "itemfilterlibrary";
+        public const string ReAgent = "reagent";
     }
 }

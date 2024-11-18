@@ -166,6 +166,12 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
                 RefreshCurrentArea();
             }
 
+            if (ImGui.Selectable(GetTemplateTypeDisplayName(Routes.Types.ReAgent), currentType == Routes.Types.ReAgent))
+            {
+                Settings.SelectedTemplateType = Routes.Types.ReAgent;
+                RefreshCurrentArea();
+            }
+
             ImGui.EndCombo();
         }
     }
@@ -354,10 +360,11 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
         }
     }
 
-    private string GetTemplateTypeDisplayName(string type) => type switch
+    public string GetTemplateTypeDisplayName(string type) => type switch
     {
         Routes.Types.ItemFilterLibrary => "Item Filter Library",
         Routes.Types.WheresMyCraftAt => "Where's My Craft At",
+        Routes.Types.ReAgent => "ReAgent",
         _ => type
     };
 

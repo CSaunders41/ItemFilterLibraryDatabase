@@ -117,7 +117,7 @@ public class PublicTemplatesArea : BaseArea
         }
         else
         {
-            ImGui.Text($"No public templates found for {GetTemplateTypeDisplayName()}");
+            ImGui.Text($"No public templates found for {ItemFilterLibraryDatabase.Main.GetTemplateTypeDisplayName(ItemFilterLibraryDatabase.Main.Settings.SelectedTemplateType)}");
         }
 
         _templateModal.Draw();
@@ -264,6 +264,7 @@ public class PublicTemplatesArea : BaseArea
         {
             Routes.Types.ItemFilterLibrary => "Item Filter Library",
             Routes.Types.WheresMyCraftAt => "Where's My Craft At",
+            Routes.Types.ReAgent => "ReAgent",
             _ => Plugin.Settings.SelectedTemplateType
         };
     }
