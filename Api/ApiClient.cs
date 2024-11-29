@@ -36,7 +36,7 @@ public class ApiClient : IDisposable
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        _httpClient.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
+        _httpClient.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
 
         DebugLog($"ApiClient initialized with base URL: {_baseUrl}");
 
@@ -309,7 +309,7 @@ public class ApiClient : IDisposable
                 var compressedContent = CompressContent(jsonContent);
                 var content = new ByteArrayContent(compressedContent);
                 content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                content.Headers.ContentEncoding.Add("deflate");
+                content.Headers.ContentEncoding.Add("gzip");
                 request.Content = content;
             }
             else
@@ -524,15 +524,13 @@ public class ApiClient : IDisposable
         var contentBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
         var contentEncoding = response.Content.Headers.ContentEncoding;
 
-        if (contentEncoding.Contains("deflate"))
+        if (contentEncoding.Contains("gzip"))
         {
             using var compressedStream = new MemoryStream(contentBytes);
             using var resultStream = new MemoryStream();
+            using var gzipStream = new System.IO.Compression.GZipStream(compressedStream, System.IO.Compression.CompressionMode.Decompress);
 
-            await using (var zlibStream = new ZlibStream(compressedStream, CompressionMode.Decompress))
-            {
-                await zlibStream.CopyToAsync(resultStream, cancellationToken);
-            }
+            await gzipStream.CopyToAsync(resultStream, cancellationToken);
 
             var decompressedBytes = resultStream.ToArray();
             DebugLog($"Decompressed response: {contentBytes.Length:N0} -> {decompressedBytes.Length:N0} bytes");
@@ -553,13 +551,14 @@ public class ApiClient : IDisposable
         var contentBytes = Encoding.UTF8.GetBytes(content);
 
         using var memoryStream = new MemoryStream();
-        using (var zlibStream = new ZlibStream(memoryStream, CompressionMode.Compress, CompressionLevel.BestSpeed))
+        using (var gzipStream = new System.IO.Compression.GZipStream(memoryStream, System.IO.Compression.CompressionMode.Compress, true))
         {
-            zlibStream.Write(contentBytes, 0, contentBytes.Length);
+            gzipStream.Write(contentBytes, 0, contentBytes.Length);
         }
 
         var compressedBytes = memoryStream.ToArray();
-        DebugLog($"Compressed request: {contentBytes.Length:N0} -> {compressedBytes.Length:N0} bytes " + $"({(float)compressedBytes.Length / contentBytes.Length:P1})");
+        DebugLog($"Compressed request: {contentBytes.Length:N0} -> {compressedBytes.Length:N0} bytes " +
+                 $"({(float)compressedBytes.Length / contentBytes.Length:P1})");
 
         return compressedBytes;
     }
