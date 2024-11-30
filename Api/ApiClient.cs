@@ -1,7 +1,7 @@
-﻿using Ionic.Zlib;
-using ItemFilterLibraryDatabase.Api.Models;
+﻿using ItemFilterLibraryDatabase.Api.Models;
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -170,7 +170,10 @@ public class ApiClient : IDisposable
         try
         {
             DebugLog("Testing authentication status");
-            var response = await GetAsync<TestAuthApiResponse>("/auth/test", cancellationToken);
+            var response = await GetAsync<TestAuthApiResponse>(Routes.Auth.Test, cancellationToken);
+
+            // Fetch template types after successful auth test
+            var templateTypesResponse = await GetAsync<TemplateTypesApiResponse>(Routes.Templates.GetTypes, cancellationToken);
 
             if (response?.Data == null)
             {
@@ -183,6 +186,20 @@ public class ApiClient : IDisposable
                 ItemFilterLibraryDatabase.Main.Settings.UserId = response.Data.User.Id;
                 ItemFilterLibraryDatabase.Main.Settings.IsAdmin = response.Data.User.IsAdmin;
                 DebugLog($"Updated user info - ID: {response.Data.User.Id}");
+            }
+
+            // Store template types in settings
+            if (templateTypesResponse?.Data != null)
+            {
+                ItemFilterLibraryDatabase.Main.Settings.AvailableTemplateTypes = templateTypesResponse.Data;
+
+                // Set first template type as current if none selected
+                if (ItemFilterLibraryDatabase.Main.Settings.CurrentTemplateType == null && templateTypesResponse.Data.Any())
+                {
+                    ItemFilterLibraryDatabase.Main.Settings.CurrentTemplateType = templateTypesResponse.Data[0];
+                }
+
+                DebugLog($"Updated template types - Count: {templateTypesResponse.Data.Count}");
             }
 
             return response.Data.Status == "connected";
@@ -334,8 +351,6 @@ public class ApiClient : IDisposable
         }
     }
 
-
-
     private async Task<bool> RefreshTokenAsync(CancellationToken cancellationToken = default)
     {
         if (!ItemFilterLibraryDatabase.Main.Settings.HasValidRefreshToken)
@@ -368,7 +383,7 @@ public class ApiClient : IDisposable
 
                                 if (response.IsSuccessStatusCode)
                                 {
-                                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                                    var content = await GetResponseContentAsync(response, cancellationToken);
                                     var refreshResponse = JsonSerializer.Deserialize<ApiResponse<AuthData>>(content);
 
                                     if (refreshResponse?.Data == null)
@@ -528,7 +543,7 @@ public class ApiClient : IDisposable
         {
             using var compressedStream = new MemoryStream(contentBytes);
             using var resultStream = new MemoryStream();
-            using var gzipStream = new System.IO.Compression.GZipStream(compressedStream, System.IO.Compression.CompressionMode.Decompress);
+            using var gzipStream = new GZipStream(compressedStream, CompressionMode.Decompress);
 
             await gzipStream.CopyToAsync(resultStream, cancellationToken);
 
@@ -551,14 +566,13 @@ public class ApiClient : IDisposable
         var contentBytes = Encoding.UTF8.GetBytes(content);
 
         using var memoryStream = new MemoryStream();
-        using (var gzipStream = new System.IO.Compression.GZipStream(memoryStream, System.IO.Compression.CompressionMode.Compress, true))
+        using (var gzipStream = new GZipStream(memoryStream, CompressionMode.Compress, true))
         {
             gzipStream.Write(contentBytes, 0, contentBytes.Length);
         }
 
         var compressedBytes = memoryStream.ToArray();
-        DebugLog($"Compressed request: {contentBytes.Length:N0} -> {compressedBytes.Length:N0} bytes " +
-                 $"({(float)compressedBytes.Length / contentBytes.Length:P1})");
+        DebugLog($"Compressed request: {contentBytes.Length:N0} -> {compressedBytes.Length:N0} bytes " + $"({(float)compressedBytes.Length / contentBytes.Length:P1})");
 
         return compressedBytes;
     }

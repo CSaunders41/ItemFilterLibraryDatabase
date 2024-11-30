@@ -15,7 +15,7 @@ public class PublicTemplatesArea : BaseArea
 {
     private const float SearchDelayDuration = 0.5f;
     private readonly List<Template> _allTemplates = [];
-    private readonly SortState _sortState = new() { Column = SortColumn.Updated, Ascending = false };
+    private readonly SortState _sortState = new() {Column = SortColumn.Updated, Ascending = false};
     private readonly TemplateModal _templateModal;
     private int _currentPage = 1;
     private string _errorMessage = string.Empty;
@@ -56,7 +56,7 @@ public class PublicTemplatesArea : BaseArea
         ImGui.SameLine();
         if (ImGui.Button("Refresh") && !_isLoadingBackground)
         {
-            LoadTemplates(true);
+            LoadTemplates();
         }
 
         if (_isLoadingBackground)
@@ -117,7 +117,7 @@ public class PublicTemplatesArea : BaseArea
         }
         else
         {
-            ImGui.Text($"No public templates found for {ItemFilterLibraryDatabase.Main.GetTemplateTypeDisplayName(ItemFilterLibraryDatabase.Main.Settings.SelectedTemplateType)}");
+            ImGui.Text($"No public templates found for '{ItemFilterLibraryDatabase.Main.Settings.CurrentTemplateType?.Description ?? "selected type"}'");
         }
 
         _templateModal.Draw();
@@ -158,7 +158,9 @@ public class PublicTemplatesArea : BaseArea
                 ImGui.Text(template.CreatorName);
 
                 ImGui.TableNextColumn();
-                ImGui.Text(template.IsPublic ? "Yes" : "No");
+                ImGui.Text(template.IsPublic
+                    ? "Yes"
+                    : "No");
 
                 ImGui.TableNextColumn();
                 ImGui.Text(FormatTimeAgo(template.UpdatedAt));
@@ -196,10 +198,8 @@ public class PublicTemplatesArea : BaseArea
         }
         else
         {
-            _filteredTemplates = _allTemplates
-                .Where(template => FuzzyMatcher.FuzzyMatch(_searchText, template.Name))
-                .OrderByDescending(template => FuzzyMatcher.GetMatchScore(_searchText, template.Name))
-                .ToList();
+            _filteredTemplates = _allTemplates.Where(template => FuzzyMatcher.FuzzyMatch(_searchText, template.Name))
+                .OrderByDescending(template => FuzzyMatcher.GetMatchScore(_searchText, template.Name)).ToList();
         }
 
         ApplySort();
@@ -258,17 +258,6 @@ public class PublicTemplatesArea : BaseArea
         };
     }
 
-    private string GetTemplateTypeDisplayName()
-    {
-        return Plugin.Settings.SelectedTemplateType switch
-        {
-            Routes.Types.ItemFilterLibrary => "Item Filter Library",
-            Routes.Types.WheresMyCraftAt => "Where's My Craft At",
-            Routes.Types.ReAgent => "ReAgent",
-            _ => Plugin.Settings.SelectedTemplateType
-        };
-    }
-
     public override void RefreshData()
     {
         if (ApiClient.IsInitialized)
@@ -286,19 +275,20 @@ public class PublicTemplatesArea : BaseArea
             _isLoadingBackground = true;
             _errorMessage = string.Empty;
 
+            var currentType = Plugin.Settings.CurrentTemplateType;
+            if (currentType == null)
+            {
+                _errorMessage = "No template type selected";
+                return;
+            }
+
             if (resetCache)
             {
                 _allTemplates.Clear();
                 _currentPage = 1;
             }
 
-            // Note: The response comes directly as PublicTemplateListResponse, not wrapped in ApiResponse
-            var response = await ApiClient.GetAsync<PublicTemplateListResponse>(
-                Routes.Templates.GetAllTemplates(
-                    Plugin.Settings.SelectedTemplateType,
-                    _currentPage
-                )
-            );
+            var response = await ApiClient.GetAsync<PublicTemplateListResponse>(Routes.Templates.GetAllTemplates(currentType.TypeId, _currentPage));
 
             if (response?.Templates != null)
             {
@@ -331,9 +321,14 @@ public class PublicTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailed>>(
-                Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true)
-            );
+            var currentType = Plugin.Settings.CurrentTemplateType;
+            if (currentType == null)
+            {
+                _errorMessage = "No template type selected";
+                return;
+            }
+
+            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.GetTemplate(currentType.TypeId, templateId, true));
 
             if (response?.Data?.LatestVersion?.Content != null)
             {

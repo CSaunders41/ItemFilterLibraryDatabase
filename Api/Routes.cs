@@ -17,7 +17,7 @@ public static class Routes
     {
         private const string Base = "/templates";
 
-        public static string GetTypes => $"{Base}/types";
+        public static string GetTypes => $"{Base}/types/list";
 
         public static string GetAllTemplates(string typeId, int page = 1) =>
             $"{Base}/{typeId}/templates?page={page}";

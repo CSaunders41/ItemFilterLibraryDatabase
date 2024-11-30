@@ -1,36 +1,19 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace ItemFilterLibraryDatabase.Api.Models;
 
-public class TestAuthApiResponse
+public class TemplateTypesApiResponse
 {
     [JsonPropertyName("data")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public TestAuthResponseData Data { get; set; } // Added setter
+    public List<TemplateType> Data { get; set; }
 }
 
-public class TestAuthResponseData
+public class TemplateType
 {
-    [JsonPropertyName("status")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public string Status { get; set; } // Added setter
+    [JsonPropertyName("type_id")]
+    public string TypeId { get; set; }
 
-    [JsonPropertyName("user")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public TestAuthUserInfo User { get; set; } // Added setter
-
-    [JsonPropertyName("tokenExpiry")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public long TokenExpiry { get; set; }
-}
-
-public class TestAuthUserInfo
-{
-    [JsonPropertyName("id")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public string Id { get; set; } // Added setter
-
-    [JsonPropertyName("isAdmin")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public bool IsAdmin { get; set; } // Added setter
+    [JsonPropertyName("description")]
+    public string Description { get; set; }
 }

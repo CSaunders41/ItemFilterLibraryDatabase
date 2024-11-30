@@ -151,25 +151,23 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
 
     private void DrawTemplateTypeSelector()
     {
-        var currentType = Settings.SelectedTemplateType;
-        if (ImGui.BeginCombo("Template Type", GetTemplateTypeDisplayName(currentType)))
+        var currentType = Settings.CurrentTemplateType;
+        if (ImGui.BeginCombo("Template Type", currentType?.Description ?? "Select Template Type"))
         {
-            if (ImGui.Selectable(GetTemplateTypeDisplayName(Routes.Types.ItemFilterLibrary), currentType == Routes.Types.ItemFilterLibrary))
+            foreach (var templateType in Settings.AvailableTemplateTypes)
             {
-                Settings.SelectedTemplateType = Routes.Types.ItemFilterLibrary;
-                RefreshCurrentArea();
-            }
+                var isSelected = currentType?.TypeId == templateType.TypeId;
+                if (ImGui.Selectable(templateType.Description, isSelected))
+                {
+                    Settings.CurrentTemplateType = templateType;
+                    RefreshCurrentArea();
+                }
 
-            if (ImGui.Selectable(GetTemplateTypeDisplayName(Routes.Types.WheresMyCraftAt), currentType == Routes.Types.WheresMyCraftAt))
-            {
-                Settings.SelectedTemplateType = Routes.Types.WheresMyCraftAt;
-                RefreshCurrentArea();
-            }
-
-            if (ImGui.Selectable(GetTemplateTypeDisplayName(Routes.Types.ReAgent), currentType == Routes.Types.ReAgent))
-            {
-                Settings.SelectedTemplateType = Routes.Types.ReAgent;
-                RefreshCurrentArea();
+                // Set the initial focus when opening the combo
+                if (isSelected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
             }
 
             ImGui.EndCombo();
@@ -200,7 +198,6 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
         {
             ImGui.Text($"User ID: {Settings.UserId}");
             ImGui.Text($"Admin: {Settings.IsAdmin}");
-
 
             if (DateTimeOffset.FromUnixTimeSeconds(Settings.AccessTokenExpiry) < DateTimeOffset.Now)
             {

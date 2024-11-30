@@ -175,7 +175,14 @@ public class TemplateModal
             _plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await _apiClient.GetAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.GetTemplate(_plugin.Settings.SelectedTemplateType, _template.TemplateId, true));
+            var currentType = _plugin.Settings.CurrentTemplateType;
+            if (currentType == null)
+            {
+                _errorMessage = "No template type selected";
+                return;
+            }
+
+            var response = await _apiClient.GetAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.GetTemplate(currentType.TypeId, _template.TemplateId, true));
 
             if (response?.Data != null)
             {
@@ -207,6 +214,13 @@ public class TemplateModal
             _plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
+            var currentType = _plugin.Settings.CurrentTemplateType;
+            if (currentType == null)
+            {
+                _errorMessage = "No template type selected";
+                return;
+            }
+
             if (_mode == TemplateModalMode.Create)
             {
                 var createRequest = new Routes.Templates.RequestBodies.CreateTemplateRequest
@@ -215,7 +229,7 @@ public class TemplateModal
                     Content = _content
                 };
 
-                await _apiClient.PostAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.CreateTemplate(_plugin.Settings.SelectedTemplateType), createRequest);
+                await _apiClient.PostAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.CreateTemplate(currentType.TypeId), createRequest);
             }
             else
             {
@@ -225,7 +239,7 @@ public class TemplateModal
                     Content = _content
                 };
 
-                await _apiClient.PutAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.UpdateTemplate(_plugin.Settings.SelectedTemplateType, _template.TemplateId), updateRequest);
+                await _apiClient.PutAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.UpdateTemplate(currentType.TypeId, _template.TemplateId), updateRequest);
             }
 
             _isOpen = false;

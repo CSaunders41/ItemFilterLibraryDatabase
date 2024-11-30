@@ -1,15 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 namespace ItemFilterLibraryDatabase.Api.Models
 {
     namespace ItemFilterLibraryDatabase.Api.Models
     {
-
         public class PublicTemplateListResponse
         {
             [JsonPropertyName("data")]
@@ -46,6 +41,4 @@ namespace ItemFilterLibraryDatabase.Api.Models
             public int LastPage { get; set; }
         }
     }
-
-
 }

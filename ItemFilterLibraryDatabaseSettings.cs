@@ -1,7 +1,9 @@
 ﻿using ExileCore.Shared.Interfaces;
 using ExileCore.Shared.Nodes;
 using ItemFilterLibraryDatabase.Api;
+using ItemFilterLibraryDatabase.Api.Models;
 using System;
+using System.Collections.Generic;
 
 namespace ItemFilterLibraryDatabase;
 
@@ -19,8 +21,9 @@ public class ItemFilterLibraryDatabaseSettings : ISettings
     public string UserId { get; set; } = string.Empty;
     public bool IsAdmin { get; set; } = false;
 
-    // Template type selection
-    public string SelectedTemplateType { get; set; } = new(Routes.Types.ItemFilterLibrary);
+    // Template Type Properties
+    public TemplateType CurrentTemplateType { get; set; }
+    public List<TemplateType> AvailableTemplateTypes { get; set; } = new();
 
     public bool HasValidAccessToken =>
         !string.IsNullOrEmpty(AccessToken) && DateTimeOffset.FromUnixTimeSeconds(AccessTokenExpiry) > DateTimeOffset.UtcNow;
@@ -29,9 +32,7 @@ public class ItemFilterLibraryDatabaseSettings : ISettings
         !string.IsNullOrEmpty(RefreshToken) && DateTimeOffset.FromUnixTimeSeconds(RefreshTokenExpiry) > DateTimeOffset.UtcNow;
 
     public ToggleNode Debug { get; set; } = new(false);
-
     public TextNode HostUrl { get; set; } = new TextNode("https://itemfilterlib.squirrelguff.xyz");
-
     public ToggleNode Enable { get; set; } = new(false);
 
     public void ClearTokens()

@@ -14,7 +14,7 @@ public class MyTemplatesArea : BaseArea
 {
     private const int ItemsPerPage = 20;
     private const float SearchDelayDuration = 0.5f;
-    private readonly SortState _sortState = new() { Column = SortColumn.Updated, Ascending = false };
+    private readonly SortState _sortState = new() {Column = SortColumn.Updated, Ascending = false};
     private readonly TemplateModal _templateModal;
     private List<Template> _allTemplates = [];
     private int _currentPage = 1;
@@ -120,7 +120,7 @@ public class MyTemplatesArea : BaseArea
         }
         else
         {
-            ImGui.Text($"No templates found for {ItemFilterLibraryDatabase.Main.GetTemplateTypeDisplayName(ItemFilterLibraryDatabase.Main.Settings.SelectedTemplateType)}");
+            ImGui.Text($"No templates found for '{ItemFilterLibraryDatabase.Main.Settings.CurrentTemplateType?.Description ?? "selected type"}'");
         }
 
         _templateModal.Draw();
@@ -161,7 +161,10 @@ public class MyTemplatesArea : BaseArea
                 ImGui.Text(template.Name);
 
                 ImGui.TableNextColumn();
-                if (ImGui.Button(template.IsPublic ? "Public" : "Private", new Vector2(-1, 0)))
+                if (ImGui.Button(template.IsPublic
+                            ? "Public"
+                            : "Private",
+                        new Vector2(-1, 0)))
                 {
                     ToggleTemplateVisibility(template.TemplateId, !template.IsPublic);
                 }
@@ -268,17 +271,6 @@ public class MyTemplatesArea : BaseArea
         };
     }
 
-    private string GetTemplateTypeDisplayName()
-    {
-        return Plugin.Settings.SelectedTemplateType switch
-        {
-            Routes.Types.ItemFilterLibrary => "Item Filter Library",
-            Routes.Types.WheresMyCraftAt => "Where's My Craft At",
-            Routes.Types.ReAgent => "ReAgent",
-            _ => Plugin.Settings.SelectedTemplateType
-        };
-    }
-
     public override void RefreshData()
     {
         RefreshTemplates();
@@ -294,9 +286,14 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<List<Template>>>(
-                Routes.Templates.GetMyTemplates(Plugin.Settings.SelectedTemplateType)
-            );
+            var currentType = Plugin.Settings.CurrentTemplateType;
+            if (currentType == null)
+            {
+                _errorMessage = "No template type selected";
+                return;
+            }
+
+            var response = await ApiClient.GetAsync<ApiResponse<List<Template>>>(Routes.Templates.GetMyTemplates(currentType.TypeId));
 
             _allTemplates = response.Data ?? [];
             FilterTemplates();
@@ -321,9 +318,14 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailed>>(
-                Routes.Templates.GetTemplate(Plugin.Settings.SelectedTemplateType, templateId, true)
-            );
+            var currentType = Plugin.Settings.CurrentTemplateType;
+            if (currentType == null)
+            {
+                _errorMessage = "No template type selected";
+                return;
+            }
+
+            var response = await ApiClient.GetAsync<ApiResponse<TemplateDetailed>>(Routes.Templates.GetTemplate(currentType.TypeId, templateId, true));
 
             if (response?.Data?.LatestVersion?.Content != null)
             {
@@ -347,10 +349,14 @@ public class MyTemplatesArea : BaseArea
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            await ApiClient.PatchAsync<ApiResponse<object>>(
-                Routes.Templates.ToggleVisibility(Plugin.Settings.SelectedTemplateType, templateId),
-                new { is_public = isPublic }
-            );
+            var currentType = Plugin.Settings.CurrentTemplateType;
+            if (currentType == null)
+            {
+                _errorMessage = "No template type selected";
+                return;
+            }
+
+            await ApiClient.PatchAsync<ApiResponse<object>>(Routes.Templates.ToggleVisibility(currentType.TypeId, templateId), new {is_public = isPublic});
 
             RefreshTemplates();
         }
@@ -364,16 +370,21 @@ public class MyTemplatesArea : BaseArea
         }
     }
 
-    protected async void DeleteTemplate(string templateId)
+    private async void DeleteTemplate(string templateId)
     {
         try
         {
             Plugin.IsLoading = true;
             _errorMessage = string.Empty;
 
-            await ApiClient.DeleteAsync<ApiResponse<object>>(
-                Routes.Templates.DeleteTemplate(Plugin.Settings.SelectedTemplateType, templateId)
-            );
+            var currentType = Plugin.Settings.CurrentTemplateType;
+            if (currentType == null)
+            {
+                _errorMessage = "No template type selected";
+                return;
+            }
+
+            await ApiClient.DeleteAsync<ApiResponse<object>>(Routes.Templates.DeleteTemplate(currentType.TypeId, templateId));
 
             RefreshTemplates();
         }
