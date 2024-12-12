@@ -12,7 +12,7 @@ public abstract class BaseArea(ItemFilterLibraryDatabase plugin, ApiClient apiCl
     public abstract string Name { get; }
 
     public abstract void Draw();
-    public abstract void RefreshData(); // Added abstract method
+    public abstract void RefreshData();
 
     public virtual void CloseModals()
     {

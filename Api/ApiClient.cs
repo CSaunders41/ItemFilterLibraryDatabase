@@ -65,7 +65,6 @@ public class ApiClient : IDisposable
         {
             DebugLog("Starting ApiClient initialization");
 
-            // First check access token
             if (ItemFilterLibraryDatabase.Main.Settings.HasValidAccessToken)
             {
                 DebugLog("Valid access token found, testing authentication");
@@ -84,8 +83,6 @@ public class ApiClient : IDisposable
                 DebugLog("No valid access token found");
             }
 
-            // If we get here, either no access token or it failed
-            // Check refresh token
             if (ItemFilterLibraryDatabase.Main.Settings.HasValidRefreshToken)
             {
                 DebugLog("Valid refresh token found, attempting to refresh access token");
@@ -104,16 +101,13 @@ public class ApiClient : IDisposable
                 DebugLog("No valid refresh token found");
             }
 
-            // If we get here, both token attempts failed
             DebugLog("All authentication attempts failed");
-            ClearAllTokens();
             IsInitialized = false;
             return false;
         }
         catch (Exception ex)
         {
             DebugLog($"Initialization failed with exception: {ex}");
-            ClearAllTokens();
             IsInitialized = false;
             return false;
         }
@@ -124,7 +118,6 @@ public class ApiClient : IDisposable
         DebugLog("Starting LoginAsync");
         try
         {
-            // 1. Decode and validate auth data
             DebugLog("Decoding auth data");
             var jsonString = Encoding.UTF8.GetString(Convert.FromBase64String(encodedAuthData));
             var authData = JsonSerializer.Deserialize<AuthData>(jsonString);
@@ -135,15 +128,12 @@ public class ApiClient : IDisposable
                 throw new ApiException("Invalid token data");
             }
 
-            // 2. Store the new tokens
             DebugLog("Storing auth data");
             StoreAuthData(authData);
 
-            // 3. Update HTTP client auth header
             DebugLog("Updating HTTP client auth header");
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ItemFilterLibraryDatabase.Main.Settings.AccessToken);
 
-            // 4. Validate with auth test
             DebugLog("Testing authentication");
             var isValid = await TestAuthAsync();
             if (!isValid)
@@ -152,7 +142,6 @@ public class ApiClient : IDisposable
                 throw new ApiException("Failed to validate authentication");
             }
 
-            // 5. Set initialized state
             IsInitialized = true;
             DebugLog("Login completed successfully");
         }
@@ -172,9 +161,6 @@ public class ApiClient : IDisposable
             DebugLog("Testing authentication status");
             var response = await GetAsync<TestAuthApiResponse>(Routes.Auth.Test, cancellationToken);
 
-            // Fetch template types after successful auth test
-            var templateTypesResponse = await GetAsync<TemplateTypesApiResponse>(Routes.Templates.GetTypes, cancellationToken);
-
             if (response?.Data == null)
             {
                 DebugLog("Test auth response was null");
@@ -188,12 +174,12 @@ public class ApiClient : IDisposable
                 DebugLog($"Updated user info - ID: {response.Data.User.Id}");
             }
 
-            // Store template types in settings
+            var templateTypesResponse = await GetAsync<TemplateTypesApiResponse>(Routes.Templates.GetTypes, cancellationToken);
+
             if (templateTypesResponse?.Data != null)
             {
                 ItemFilterLibraryDatabase.Main.Settings.AvailableTemplateTypes = templateTypesResponse.Data;
 
-                // Set first template type as current if none selected
                 if (ItemFilterLibraryDatabase.Main.Settings.CurrentTemplateType == null && templateTypesResponse.Data.Any())
                 {
                     ItemFilterLibraryDatabase.Main.Settings.CurrentTemplateType = templateTypesResponse.Data[0];
@@ -206,7 +192,7 @@ public class ApiClient : IDisposable
         }
         catch (Exception ex)
         {
-            DebugLog($"Auth test failed: {ex}");
+            DebugLog($"Auth test failed due to possible connection issue: {ex}");
             return false;
         }
     }
@@ -271,7 +257,6 @@ public class ApiClient : IDisposable
                                 return await DeserializeResponseAsync<T>(response, cancellationToken);
                             }
                         }
-
                         break;
 
                     case ErrorCodes.AUTH_REFRESH_ERROR:
@@ -280,21 +265,7 @@ public class ApiClient : IDisposable
                         break;
 
                     default:
-                        DebugLog($"Received unknown auth error: {error?.Error?.Code}");
-                        if (ItemFilterLibraryDatabase.Main.Settings.HasValidRefreshToken)
-                        {
-                            DebugLog("Attempting token refresh for unknown auth error");
-                            if (await RefreshTokenAsync(cancellationToken))
-                            {
-                                response = await ExecuteRequestAsync(method, endpoint, data, true, cancellationToken);
-                                if (response.IsSuccessStatusCode)
-                                {
-                                    return await DeserializeResponseAsync<T>(response, cancellationToken);
-                                }
-                            }
-                        }
-
-                        ClearAccessToken();
+                        DebugLog($"Received unknown auth error: {error?.Error?.Code} - not clearing tokens");
                         break;
                 }
             }
@@ -311,7 +282,6 @@ public class ApiClient : IDisposable
             throw new ApiException($"Request failed: {endpoint}", ex);
         }
     }
-
     private async Task<HttpResponseMessage> ExecuteRequestAsync(HttpMethod method, string endpoint, object data, bool isRetry, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, endpoint);
@@ -320,7 +290,6 @@ public class ApiClient : IDisposable
             var jsonContent = JsonSerializer.Serialize(data, _jsonOptions);
             DebugLog($"Request body: {jsonContent}");
 
-            // Compress if content is larger than 1KB
             if (jsonContent.Length > 1024)
             {
                 var compressedContent = CompressContent(jsonContent);
@@ -362,96 +331,95 @@ public class ApiClient : IDisposable
         try
         {
             return await Task.Run(async () =>
+            {
+                await _refreshLock.WaitAsync(cancellationToken);
+                try
                 {
-                    await _refreshLock.WaitAsync(cancellationToken);
-                    try
+                    var currentAuth = _httpClient.DefaultRequestHeaders.Authorization;
+                    _httpClient.DefaultRequestHeaders.Authorization = null;
+
+                    while (true)
                     {
-                        // Store and remove current auth header
-                        var currentAuth = _httpClient.DefaultRequestHeaders.Authorization;
-                        _httpClient.DefaultRequestHeaders.Authorization = null;
-
-                        while (true) // Loop to handle rate limit retries
+                        try
                         {
-                            try
+                            DebugLog("Sending refresh token request");
+                            using var request = new HttpRequestMessage(HttpMethod.Post, Routes.Auth.Refresh);
+                            request.Content = JsonContent.Create(new { refresh_token = ItemFilterLibraryDatabase.Main.Settings.RefreshToken },
+                                options: new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+                            using var response = await _httpClient.SendAsync(request, cancellationToken);
+
+                            if (response.IsSuccessStatusCode)
                             {
-                                DebugLog("Sending refresh token request");
-                                using var request = new HttpRequestMessage(HttpMethod.Post, Routes.Auth.Refresh);
-                                request.Content = JsonContent.Create(new {refresh_token = ItemFilterLibraryDatabase.Main.Settings.RefreshToken},
-                                    options: new JsonSerializerOptions {PropertyNamingPolicy = JsonNamingPolicy.CamelCase});
+                                var content = await GetResponseContentAsync(response, cancellationToken);
+                                var refreshResponse = JsonSerializer.Deserialize<ApiResponse<AuthData>>(content);
 
-                                using var response = await _httpClient.SendAsync(request, cancellationToken);
-
-                                if (response.IsSuccessStatusCode)
+                                if (refreshResponse?.Data == null)
                                 {
-                                    var content = await GetResponseContentAsync(response, cancellationToken);
-                                    var refreshResponse = JsonSerializer.Deserialize<ApiResponse<AuthData>>(content);
-
-                                    if (refreshResponse?.Data == null)
-                                    {
-                                        DebugLog("Refresh response contained no data");
-                                        return false;
-                                    }
-
-                                    DebugLog("Storing refreshed auth data");
-                                    StoreAuthData(refreshResponse.Data);
-                                    _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ItemFilterLibraryDatabase.Main.Settings.AccessToken);
-                                    DebugLog("Token refresh completed successfully");
-                                    return true;
+                                    DebugLog("Refresh response contained no data");
+                                    return false;
                                 }
 
-                                if (response.StatusCode == HttpStatusCode.TooManyRequests)
-                                {
-                                    // Get retry-after value
-                                    if (response.Headers.TryGetValues("retry-after", out var retryValues) && int.TryParse(retryValues.FirstOrDefault(), out var retrySeconds))
-                                    {
-                                        // Add 1 second buffer
-                                        retrySeconds += 1;
-                                        DebugLog($"Rate limit hit. Waiting {retrySeconds} seconds before retry");
+                                DebugLog("Storing refreshed auth data");
+                                StoreAuthData(refreshResponse.Data);
+                                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ItemFilterLibraryDatabase.Main.Settings.AccessToken);
+                                DebugLog("Token refresh completed successfully");
+                                return true;
+                            }
 
-                                        try
-                                        {
-                                            await Task.Delay(TimeSpan.FromSeconds(retrySeconds), cancellationToken);
-                                            // Continue the loop to retry
-                                            continue;
-                                        }
-                                        catch (OperationCanceledException)
-                                        {
-                                            DebugLog("Refresh token retry was cancelled");
-                                            return false;
-                                        }
-                                    }
-                                }
-                                else if (response.StatusCode == HttpStatusCode.Unauthorized)
+                            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                            {
+                                var error = await DeserializeResponseAsync<ApiErrorResponse>(response, cancellationToken);
+                                if (error?.Error?.Code == ErrorCodes.AUTH_REFRESH_ERROR)
                                 {
-                                    var error = await DeserializeResponseAsync<ApiErrorResponse>(response, cancellationToken);
-                                    if (error?.Error?.Code == ErrorCodes.AUTH_REFRESH_ERROR)
-                                    {
-                                        DebugLog("Refresh token is invalid");
-                                        ClearAllTokens();
-                                        return false;
-                                    }
+                                    DebugLog("Received explicit AUTH_REFRESH_ERROR, clearing tokens");
+                                    ClearAllTokens();
+                                    return false;
                                 }
 
-                                // If we get here, something else went wrong
-                                var contentWrong = await response.Content.ReadAsStringAsync(cancellationToken);
-                                DebugLog($"Refresh failed with status {response.StatusCode}: {contentWrong}");
+                                DebugLog($"Received auth error: {error?.Error?.Code} - not clearing tokens");
                                 return false;
                             }
-                            catch (Exception ex) when (ex is not OperationCanceledException)
+
+                            if (response.StatusCode == HttpStatusCode.TooManyRequests)
                             {
-                                DebugLog($"Token refresh failed with error: {ex}");
-                                _httpClient.DefaultRequestHeaders.Authorization = currentAuth;
-                                return false;
+                                if (response.Headers.TryGetValues("retry-after", out var retryValues) &&
+                                    int.TryParse(retryValues.FirstOrDefault(), out var retrySeconds))
+                                {
+                                    retrySeconds += 1;
+                                    DebugLog($"Rate limit hit. Waiting {retrySeconds} seconds before retry");
+
+                                    try
+                                    {
+                                        await Task.Delay(TimeSpan.FromSeconds(retrySeconds), cancellationToken);
+                                        continue;
+                                    }
+                                    catch (OperationCanceledException)
+                                    {
+                                        DebugLog("Refresh token retry was cancelled");
+                                        return false;
+                                    }
+                                }
                             }
+
+                            DebugLog($"Refresh failed with status {response.StatusCode} - not clearing tokens");
+                            return false;
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            DebugLog($"Token refresh failed due to possible connection issue: {ex}");
+                            _httpClient.DefaultRequestHeaders.Authorization = currentAuth;
+                            return false;
                         }
                     }
-                    finally
-                    {
-                        _refreshLock.Release();
-                        DebugLog("Released refresh lock");
-                    }
-                },
-                cancellationToken);
+                }
+                finally
+                {
+                    _refreshLock.Release();
+                    DebugLog("Released refresh lock");
+                }
+            },
+            cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -459,7 +427,6 @@ public class ApiClient : IDisposable
             return false;
         }
     }
-
     private void StoreAuthData(AuthData authData)
     {
         DebugLog("Starting to store new auth data");

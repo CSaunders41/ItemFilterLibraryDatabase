@@ -45,8 +45,6 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
             _apiClient = new ApiClient(Settings.HostUrl.Value);
             _initializationSource = new TaskCompletionSource<bool>();
 
-            // Start the initialization process asynchronously
-            // Explicitly specify the type for the task
             _initTask = Task.Run(InitializePluginAsync);
 
             return true;
@@ -71,7 +69,6 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
             DebugLog("Starting plugin initialization");
             IsLoading = true;
 
-            // Initialize API client first
             var initialized = await _apiClient.InitializeAsync();
             if (!initialized)
             {
@@ -163,7 +160,6 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
                     RefreshCurrentArea();
                 }
 
-                // Set the initial focus when opening the combo
                 if (isSelected)
                 {
                     ImGui.SetItemDefaultFocus();
@@ -184,7 +180,6 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
 
         ImGui.Indent();
 
-        // Status Display
         var statusColor = _apiClient.IsInitialized
             ? new Vector4(0, 1, 0, 1)
             : new Vector4(1, 0, 0, 1);
@@ -218,7 +213,6 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
             }
         }
 
-        // Authentication Controls
         if (ImGui.TreeNode("Authentication Controls"))
         {
             if (!_isAuthenticating)
@@ -256,7 +250,6 @@ public class ItemFilterLibraryDatabase : BaseSettingsPlugin<ItemFilterLibraryDat
             ImGui.TreePop();
         }
 
-        // Status Message
         if (!string.IsNullOrEmpty(_statusMessage))
         {
             var messageColor = _statusMessage.StartsWith("Error:", StringComparison.OrdinalIgnoreCase) || _statusMessage.StartsWith("Failed", StringComparison.OrdinalIgnoreCase) ||

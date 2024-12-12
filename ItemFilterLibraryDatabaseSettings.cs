@@ -9,19 +9,15 @@ namespace ItemFilterLibraryDatabase;
 
 public class ItemFilterLibraryDatabaseSettings : ISettings
 {
-    // Tokens
     public string AccessToken { get; set; } = string.Empty;
     public string RefreshToken { get; set; } = string.Empty;
 
-    // Expiry times (Unix timestamps)
     public long AccessTokenExpiry { get; set; } = 0;
     public long RefreshTokenExpiry { get; set; } = 0;
 
-    // User info
     public string UserId { get; set; } = string.Empty;
     public bool IsAdmin { get; set; } = false;
 
-    // Template Type Properties
     public TemplateType CurrentTemplateType { get; set; }
     public List<TemplateType> AvailableTemplateTypes { get; set; } = new();
 

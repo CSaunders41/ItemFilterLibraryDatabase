@@ -5,32 +5,26 @@ namespace ItemFilterLibraryDatabase.Api.Models;
 public class TestAuthApiResponse
 {
     [JsonPropertyName("data")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public TestAuthResponseData Data { get; set; } // Added setter
+    public TestAuthResponseData Data { get; set; }
 }
 
 public class TestAuthResponseData
 {
     [JsonPropertyName("status")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public string Status { get; set; } // Added setter
+    public string Status { get; set; }
 
     [JsonPropertyName("user")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public TestAuthUserInfo User { get; set; } // Added setter
+    public TestAuthUserInfo User { get; set; }
 
     [JsonPropertyName("tokenExpiry")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
     public long TokenExpiry { get; set; }
 }
 
 public class TestAuthUserInfo
 {
     [JsonPropertyName("id")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public string Id { get; set; } // Added setter
+    public string Id { get; set; }
 
     [JsonPropertyName("isAdmin")]
-    // ReSharper disable once UnusedAutoPropertyAccessor.Local
-    public bool IsAdmin { get; set; } // Added setter
+    public bool IsAdmin { get; set; }
 }

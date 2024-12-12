@@ -41,36 +41,30 @@ public static class FuzzyMatcher
         if (string.IsNullOrEmpty(pattern)) return true;
         if (string.IsNullOrEmpty(input)) return false;
 
-        // Convert both to lowercase for case-insensitive matching
         pattern = pattern.ToLowerInvariant();
         input = input.ToLowerInvariant();
 
-        // Split pattern into words for partial matching
         var patternWords = pattern.Split(new[] {' '}, StringSplitOptions.RemoveEmptyEntries);
         var inputWords = input.Split(new[] {' '}, StringSplitOptions.RemoveEmptyEntries);
 
-        // If we have multiple pattern words, all must match at least one input word
         foreach (var patternWord in patternWords)
         {
             var wordMatched = false;
 
             foreach (var inputWord in inputWords)
             {
-                // Check for direct substring match first (highest priority)
                 if (inputWord.Contains(patternWord))
                 {
                     wordMatched = true;
                     break;
                 }
 
-                // Check for word start match with reduced threshold
                 if (inputWord.StartsWith(patternWord))
                 {
                     wordMatched = true;
                     break;
                 }
 
-                // If pattern word is at least 3 characters, try Levenshtein distance
                 if (patternWord.Length >= 3)
                 {
                     var distance = LevenshteinDistance(patternWord, inputWord);
@@ -84,7 +78,6 @@ public static class FuzzyMatcher
                 }
             }
 
-            // If any pattern word doesn't match any input word, return false
             if (!wordMatched)
             {
                 return false;
@@ -115,27 +108,23 @@ public static class FuzzyMatcher
             {
                 var score = 0;
 
-                // Exact match
                 if (inputWord.Equals(patternWord))
                 {
                     score = 100;
                 }
-                // Contains as substring
                 else if (inputWord.Contains(patternWord))
                 {
                     score = 75;
                 }
-                // Starts with
                 else if (inputWord.StartsWith(patternWord))
                 {
                     score = 60;
                 }
-                // Levenshtein distance for similar words
                 else if (patternWord.Length >= 3)
                 {
                     var distance = LevenshteinDistance(patternWord, inputWord);
                     var similarity = 1 - (double)distance / Math.Max(patternWord.Length, inputWord.Length);
-                    score = (int)(similarity * 50); // Max 50 points for fuzzy matches
+                    score = (int)(similarity * 50);
                 }
 
                 bestWordScore = Math.Max(bestWordScore, score);

@@ -42,7 +42,6 @@ public class MyTemplatesArea : BaseArea
 
     public override void Draw()
     {
-        // Top controls section
         var buttonSize = new Vector2(120, 24);
 
         if (ImGui.Button("New Template", buttonSize))
@@ -67,7 +66,6 @@ public class MyTemplatesArea : BaseArea
 
         ShowError(_errorMessage);
 
-        // PublicPagination controls
         if (_filteredTemplates.Count > 0)
         {
             var totalPages = (_filteredTemplates.Count + ItemsPerPage - 1) / ItemsPerPage;
@@ -95,7 +93,6 @@ public class MyTemplatesArea : BaseArea
             ImGui.Separator();
         }
 
-        // Handle search delay
         if (_searchDelay > 0)
         {
             _searchDelay -= ImGui.GetIO().DeltaTime;
@@ -105,7 +102,6 @@ public class MyTemplatesArea : BaseArea
             }
         }
 
-        // Table section
         if (_filteredTemplates.Count > 0)
         {
             DrawTemplatesTable();
