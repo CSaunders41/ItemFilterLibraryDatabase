@@ -132,11 +132,19 @@ public class TemplateModal
 
     private void DrawContent()
     {
-        var flags = _mode == TemplateModalMode.View
-            ? ImGuiInputTextFlags.ReadOnly
-            : ImGuiInputTextFlags.None;
+        var flags = _mode == TemplateModalMode.View ? ImGuiInputTextFlags.ReadOnly : ImGuiInputTextFlags.None;
+        var windowFlags = ImGuiWindowFlags.HorizontalScrollbar | ImGuiWindowFlags.AlwaysVerticalScrollbar;
 
-        ImGui.InputTextMultiline("##content", ref _content, 100000, new Vector2(-1, -50), flags);
+        if (ImGui.BeginChild("##contentChild", new Vector2(-1, -50), ImGuiChildFlags.None, windowFlags))
+        {
+            var textSize = ImGui.CalcTextSize(_content);
+            var contentWidth = Math.Max(ImGui.GetWindowWidth(), textSize.X + 20);
+            var contentHeight = Math.Max(ImGui.GetWindowHeight(), textSize.Y + 20);
+
+            ImGui.InputTextMultiline("##content", ref _content, 500_000, new Vector2(contentWidth, contentHeight), flags);
+        }
+
+        ImGui.EndChild();
     }
 
     private void DrawFooter()
