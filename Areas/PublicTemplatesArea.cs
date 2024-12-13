@@ -15,15 +15,15 @@ public class PublicTemplatesArea : BaseArea
 {
     private const float SearchDelayDuration = 0.5f;
     private readonly List<Template> _allTemplates = [];
-    private readonly SortState _sortState = new() {Column = SortColumn.Updated, Ascending = false};
+    private readonly SortState _sortState = new SortState {Column = SortColumn.Updated, Ascending = false};
     private readonly TemplateModal _templateModal;
     private int _currentPage = 1;
     private string _errorMessage = string.Empty;
     private List<Template> _filteredTemplates = [];
-    private bool _initialLoadComplete = false;
-    private bool _isLoadingBackground = false;
-    private PaginationInfo _paginationInfo = new();
-    private float _searchDelay = 0;
+    private bool _initialLoadComplete;
+    private bool _isLoadingBackground;
+    private PaginationInfo _paginationInfo = new PaginationInfo();
+    private float _searchDelay;
     private string _searchText = string.Empty;
 
     public PublicTemplatesArea(ItemFilterLibraryDatabase plugin, ApiClient apiClient) : base(plugin, apiClient)
@@ -152,21 +152,19 @@ public class PublicTemplatesArea : BaseArea
                 ImGui.TableNextRow();
 
                 ImGui.TableNextColumn();
-                ImGui.Text(template.Name);
+                ImGui.TextUnformatted(template.Name);
 
                 ImGui.TableNextColumn();
-                ImGui.Text(template.CreatorName);
+                ImGui.TextUnformatted(template.CreatorName);
 
                 ImGui.TableNextColumn();
-                ImGui.Text(template.IsPublic
-                    ? "Yes"
-                    : "No");
+                ImGui.TextUnformatted(template.IsPublic ? "Yes" : "No");
 
                 ImGui.TableNextColumn();
-                ImGui.Text(FormatTimeAgo(template.UpdatedAt));
+                ImGui.TextUnformatted(FormatTimeAgo(template.UpdatedAt));
 
                 ImGui.TableNextColumn();
-                ImGui.Text(template.Version.ToString());
+                ImGui.TextUnformatted(template.Version.ToString());
 
                 ImGui.TableNextColumn();
                 ImGui.PushID($"actions_{template.TemplateId}");
@@ -211,18 +209,10 @@ public class PublicTemplatesArea : BaseArea
 
         query = _sortState.Column switch
         {
-            SortColumn.Name => _sortState.Ascending
-                ? query.OrderBy(t => t.Name)
-                : query.OrderByDescending(t => t.Name),
-            SortColumn.Author => _sortState.Ascending
-                ? query.OrderBy(t => t.CreatorName)
-                : query.OrderByDescending(t => t.CreatorName),
-            SortColumn.Updated => _sortState.Ascending
-                ? query.OrderBy(t => t.UpdatedAt)
-                : query.OrderByDescending(t => t.UpdatedAt),
-            SortColumn.Version => _sortState.Ascending
-                ? query.OrderBy(t => t.Version)
-                : query.OrderByDescending(t => t.Version),
+            SortColumn.Name => _sortState.Ascending ? query.OrderBy(t => t.Name) : query.OrderByDescending(t => t.Name),
+            SortColumn.Author => _sortState.Ascending ? query.OrderBy(t => t.CreatorName) : query.OrderByDescending(t => t.CreatorName),
+            SortColumn.Updated => _sortState.Ascending ? query.OrderBy(t => t.UpdatedAt) : query.OrderByDescending(t => t.UpdatedAt),
+            SortColumn.Version => _sortState.Ascending ? query.OrderBy(t => t.Version) : query.OrderByDescending(t => t.Version),
             _ => query
         };
 

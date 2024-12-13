@@ -41,162 +41,157 @@ public class MyTemplatesArea : BaseArea
     }
 
     public override void Draw()
+{
+    ImGui.PushItemWidth(300);
+    if (ImGui.InputText("Search Templates", ref _searchText, 100))
     {
-        var buttonSize = new Vector2(120, 24);
+        _searchDelay = SearchDelayDuration;
+    }
 
-        if (ImGui.Button("New Template", buttonSize))
+    ImGui.PopItemWidth();
+
+    ImGui.SameLine();
+    if (ImGui.Button("Refresh") && !_isRefreshing)
+    {
+        RefreshTemplates();
+    }
+
+    ImGui.SameLine();
+    if (ImGui.Button("New Template [+]"))
+    {
+        _templateModal.Show(null, TemplateModalMode.Create);
+    }
+
+    ShowError(_errorMessage);
+
+    if (_filteredTemplates.Count > 0)
+    {
+        var totalPages = (_filteredTemplates.Count + ItemsPerPage - 1) / ItemsPerPage;
+
+        if (ImGui.Button("Previous") && _currentPage > 1)
         {
-            _templateModal.Show(null, TemplateModalMode.Create);
+            _currentPage--;
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("Refresh", buttonSize) && !_isRefreshing)
+        ImGui.Text($"Page {_currentPage} of {totalPages}");
+
+        ImGui.SameLine();
+        if (ImGui.Button("Next") && _currentPage < totalPages)
         {
-            RefreshTemplates();
+            _currentPage++;
         }
 
         ImGui.SameLine();
-        ImGui.PushItemWidth(300);
-        if (ImGui.InputText("Search Templates", ref _searchText, 100))
-        {
-            _searchDelay = SearchDelayDuration;
-        }
+        var spacing = ImGui.GetStyle().ItemSpacing.X * 4;
+        ImGui.Dummy(new Vector2(spacing, 0));
+        ImGui.SameLine();
 
-        ImGui.PopItemWidth();
-
-        ShowError(_errorMessage);
-
-        if (_filteredTemplates.Count > 0)
-        {
-            var totalPages = (_filteredTemplates.Count + ItemsPerPage - 1) / ItemsPerPage;
-
-            if (ImGui.Button("Previous") && _currentPage > 1)
-            {
-                _currentPage--;
-            }
-
-            ImGui.SameLine();
-            ImGui.Text($"Page {_currentPage} of {totalPages}");
-
-            ImGui.SameLine();
-            if (ImGui.Button("Next") && _currentPage < totalPages)
-            {
-                _currentPage++;
-            }
-
-            ImGui.SameLine();
-            var spacing = ImGui.GetStyle().ItemSpacing.X * 4;
-            ImGui.Dummy(new Vector2(spacing, 0));
-            ImGui.SameLine();
-
-            ImGui.Text($"Total templates: {_filteredTemplates.Count}");
-            ImGui.Separator();
-        }
-
-        if (_searchDelay > 0)
-        {
-            _searchDelay -= ImGui.GetIO().DeltaTime;
-            if (_searchDelay <= 0)
-            {
-                FilterTemplates();
-            }
-        }
-
-        if (_filteredTemplates.Count > 0)
-        {
-            DrawTemplatesTable();
-        }
-        else if (_isRefreshing)
-        {
-            ImGui.Text("Loading templates...");
-        }
-        else if (!string.IsNullOrEmpty(_searchText))
-        {
-            ImGui.Text("No templates found matching your search");
-        }
-        else
-        {
-            ImGui.Text($"No templates found for '{ItemFilterLibraryDatabase.Main.Settings.CurrentTemplateType?.Description ?? "selected type"}'");
-        }
-
-        _templateModal.Draw();
+        ImGui.Text($"Total templates: {_filteredTemplates.Count}");
+        ImGui.Separator();
     }
 
-    private void DrawTemplatesTable()
+    if (_searchDelay > 0)
     {
-        var flags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable;
-
-        if (ImGui.BeginTable("my_templates", 5, flags))
+        _searchDelay -= ImGui.GetIO().DeltaTime;
+        if (_searchDelay <= 0)
         {
-            ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Public", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
-            ImGui.TableSetupColumn("Updated", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 100);
-            ImGui.TableSetupColumn("Version", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
-            ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed, 240);
-            ImGui.TableHeadersRow();
-
-            var sortSpecs = ImGui.TableGetSortSpecs();
-            if (sortSpecs.SpecsDirty)
-            {
-                var sortSpec = sortSpecs.Specs;
-                _sortState.Column = (SortColumn)sortSpec.ColumnIndex;
-                _sortState.Ascending = sortSpec.SortDirection == ImGuiSortDirection.Ascending;
-                ApplySort();
-                sortSpecs.SpecsDirty = false;
-            }
-
-            var startIndex = (_currentPage - 1) * ItemsPerPage;
-            var pageTemplates = _filteredTemplates.Skip(startIndex).Take(ItemsPerPage).ToList();
-
-            foreach (var template in pageTemplates)
-            {
-                ImGui.PushID($"actions_{template.TemplateId}");
-                ImGui.TableNextRow();
-
-                ImGui.TableNextColumn();
-                ImGui.Text(template.Name);
-
-                ImGui.TableNextColumn();
-                if (ImGui.Button(template.IsPublic
-                            ? "Public"
-                            : "Private",
-                        new Vector2(-1, 0)))
-                {
-                    ToggleTemplateVisibility(template.TemplateId, !template.IsPublic);
-                }
-
-                ImGui.TableNextColumn();
-                ImGui.Text(FormatTimeAgo(template.UpdatedAt));
-
-                ImGui.TableNextColumn();
-                ImGui.Text(template.Version.ToString());
-
-                ImGui.TableNextColumn();
-
-                var buttonWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X * 2) / 3;
-                if (ImGui.Button("Edit", new Vector2(buttonWidth, 0)))
-                {
-                    _templateModal.Show(template, TemplateModalMode.Edit);
-                }
-
-                ImGui.SameLine();
-                if (ImGui.Button("Copy", new Vector2(buttonWidth, 0)))
-                {
-                    CopyTemplateContent(template.TemplateId);
-                }
-
-                ImGui.SameLine();
-                if (ImGui.Button("Delete", new Vector2(buttonWidth, 0)))
-                {
-                    DeleteTemplate(template.TemplateId);
-                }
-
-                ImGui.PopID();
-            }
-
-            ImGui.EndTable();
+            FilterTemplates();
         }
     }
+
+    if (_filteredTemplates.Count > 0)
+    {
+        DrawTemplatesTable();
+    }
+    else if (_isRefreshing)
+    {
+        ImGui.Text("Loading templates...");
+    }
+    else if (!string.IsNullOrEmpty(_searchText))
+    {
+        ImGui.Text("No templates found matching your search");
+    }
+    else
+    {
+        ImGui.Text($"No templates found for '{ItemFilterLibraryDatabase.Main.Settings.CurrentTemplateType?.Description ?? "selected type"}'");
+    }
+
+    _templateModal.Draw();
+}
+
+private void DrawTemplatesTable()
+{
+    var flags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable;
+
+    if (ImGui.BeginTable("my_templates", 5, flags))
+    {
+        ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("Public", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
+        ImGui.TableSetupColumn("Updated", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 100);
+        ImGui.TableSetupColumn("Version", ImGuiTableColumnFlags.DefaultSort | ImGuiTableColumnFlags.WidthFixed, 70);
+        ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed, 240);
+        ImGui.TableHeadersRow();
+
+        var sortSpecs = ImGui.TableGetSortSpecs();
+        if (sortSpecs.SpecsDirty)
+        {
+            var sortSpec = sortSpecs.Specs;
+            _sortState.Column = (SortColumn)sortSpec.ColumnIndex;
+            _sortState.Ascending = sortSpec.SortDirection == ImGuiSortDirection.Ascending;
+            ApplySort();
+            sortSpecs.SpecsDirty = false;
+        }
+
+        var startIndex = (_currentPage - 1) * ItemsPerPage;
+        var pageTemplates = _filteredTemplates.Skip(startIndex).Take(ItemsPerPage).ToList();
+
+        foreach (var template in pageTemplates)
+        {
+            ImGui.PushID($"actions_{template.TemplateId}");
+            ImGui.TableNextRow();
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(template.Name);
+
+            ImGui.TableNextColumn();
+            if (ImGui.Button(template.IsPublic ? "Public" : "Private", new Vector2(-1, 0)))
+            {
+                ToggleTemplateVisibility(template.TemplateId, !template.IsPublic);
+            }
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(FormatTimeAgo(template.UpdatedAt));
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(template.Version.ToString());
+
+            ImGui.TableNextColumn();
+
+            var buttonWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X * 2) / 3;
+            if (ImGui.Button("Edit", new Vector2(buttonWidth, 0)))
+            {
+                _templateModal.Show(template, TemplateModalMode.Edit);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Copy", new Vector2(buttonWidth, 0)))
+            {
+                CopyTemplateContent(template.TemplateId);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Delete", new Vector2(buttonWidth, 0)))
+            {
+                DeleteTemplate(template.TemplateId);
+            }
+
+            ImGui.PopID();
+        }
+
+        ImGui.EndTable();
+    }
+}
 
     private void FilterTemplates()
     {
