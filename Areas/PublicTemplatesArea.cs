@@ -125,7 +125,7 @@ public class PublicTemplatesArea : BaseArea
 
     private void DrawTemplatesTable()
     {
-        var flags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY;
+        var flags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable;
 
         if (ImGui.BeginTable("public_templates", 6, flags))
         {
