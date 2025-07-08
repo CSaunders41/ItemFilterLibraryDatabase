@@ -28,7 +28,7 @@ public class ItemFilterLibraryDatabaseSettings : ISettings
         !string.IsNullOrEmpty(RefreshToken) && DateTimeOffset.FromUnixTimeSeconds(RefreshTokenExpiry) > DateTimeOffset.UtcNow;
 
     public ToggleNode Debug { get; set; } = new(false);
-    public TextNode HostUrl { get; set; } = new TextNode("https://itemfilterlib.squirrelguff.xyz");
+    public TextNode HostUrl { get; set; } = new TextNode("http://localhost:5000");
     public ToggleNode Enable { get; set; } = new(false);
 
     public void ClearTokens()
