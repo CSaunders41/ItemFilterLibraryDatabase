@@ -20,6 +20,8 @@ This is a self-hosted replacement for the external ItemFilterLibrary database sy
 
 ### 1. Build and Run the API Server
 
+**⚠️ Important:** The LocalDatabase folder contains a separate ASP.NET Core API server project. This is NOT compiled with the plugin - it runs as a standalone application.
+
 ```bash
 cd LocalDatabase/ItemFilterLibraryAPI
 dotnet restore

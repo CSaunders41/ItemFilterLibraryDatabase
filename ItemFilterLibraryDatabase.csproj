@@ -36,4 +36,11 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="SharpDX.Mathematics" Version="4.2.0" />
   </ItemGroup>
+  
+  <!-- Exclude LocalDatabase folder - this is a separate ASP.NET Core API server project -->
+  <ItemGroup>
+    <Compile Remove="LocalDatabase\**" />
+    <EmbeddedResource Remove="LocalDatabase\**" />
+    <None Remove="LocalDatabase\**" />
+  </ItemGroup>
 </Project>
